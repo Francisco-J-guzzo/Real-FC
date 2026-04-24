@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cancha FC</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green:#00C853;--green-dim:#00963e;--surface:#0f1a0f;--card:#162416;
+  --border:#2a3f2a;--text:#e8f5e9;--muted:#7a9b7a;--red:#ff4444;
+  --gold:#ffd700;--blue:#4fc3f7;--radius:10px;
+}
+body{background:var(--surface);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+.app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+
+/* AUTH */
+.auth-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;gap:2rem;background:radial-gradient(ellipse at 50% 0%,#1a3a1a 0%,var(--surface) 70%)}
+.auth-logo h1{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;color:var(--green);letter-spacing:4px;text-align:center}
+.auth-logo p{color:var(--muted);font-size:.85rem;letter-spacing:2px;text-transform:uppercase;text-align:center;margin-top:4px}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;width:100%;max-width:360px}
+.tab-row{display:flex;gap:4px;background:var(--surface);border-radius:8px;padding:4px;margin-bottom:1.5rem}
+.tab-btn{flex:1;padding:8px;border:none;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;font-size:.85rem;font-weight:500;transition:all .2s;background:transparent;color:var(--muted)}
+.tab-btn.active{background:var(--green);color:#000}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:1rem}
+.field label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.field input,.field select,.field textarea{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:.9rem;transition:border-color .2s;outline:none;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--green)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border:none;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;font-size:.88rem;font-weight:600;transition:all .15s}
+.btn-primary{background:var(--green);color:#000}
+.btn-primary:hover{background:#00e65c}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--green);color:var(--green)}
+.btn-danger{background:transparent;border:1px solid var(--red);color:var(--red)}
+.btn-ghost{background:transparent;color:var(--muted);padding:6px 10px}
+.btn-full{width:100%}
+.btn-sm{padding:5px 10px;font-size:.78rem}
+
+/* LAYOUT */
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-logo{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--green);letter-spacing:2px}
+.header-right{display:flex;align-items:center;gap:8px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;color:#000;cursor:pointer}
+.nav{background:var(--card);border-top:1px solid var(--border);display:flex;position:sticky;bottom:0;z-index:100}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px;cursor:pointer;color:var(--muted);font-size:.7rem;font-weight:500;border:none;background:transparent;transition:color .2s}
+.nav-item.active{color:var(--green)}
+.nav-item svg{width:20px;height:20px}
+.content{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card-title{font-weight:600;font-size:.95rem}
+.card-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+
+/* MATCH */
+.match-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px}
+.match-top{padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+.match-date{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--green);letter-spacing:1px}
+.match-time{font-size:.78rem;color:var(--muted)}
+.match-status{font-size:.7rem;font-weight:600;padding:3px 8px;border-radius:20px;text-transform:uppercase}
+.status-open{background:rgba(0,200,83,.15);color:var(--green)}
+.status-closed{background:rgba(255,68,68,.15);color:var(--red)}
+.status-played{background:rgba(79,195,247,.15);color:var(--blue)}
+.match-body{padding:0 16px 14px}
+.progress-bar{height:4px;background:var(--border);border-radius:2px;margin-bottom:10px;overflow:hidden}
+.progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width .3s}
+.match-stats{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.match-stat{display:flex;align-items:center;gap:5px;font-size:.8rem;color:var(--muted)}
+.match-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* SCORE */
+.score-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.score-row:last-child{border-bottom:none}
+.score-rank{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--muted);width:28px;text-align:center}
+.score-rank.top{color:var(--gold)}
+.score-av{width:36px;height:36px;border-radius:50%;background:var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:#000;flex-shrink:0}
+.score-info{flex:1;min-width:0}
+.score-name{font-weight:500;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score-detail{font-size:.72rem;color:var(--muted)}
+.score-val{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--green)}
+.score-bar{height:3px;background:var(--border);border-radius:2px;margin-top:4px}
+.score-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--green-dim),var(--green))}
+
+/* MISC */
+.alert{padding:10px 14px;border-radius:8px;font-size:.85rem;margin-bottom:12px}
+.alert-error{background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:var(--red)}
+.alert-success{background:rgba(0,200,83,.1);border:1px solid rgba(0,200,83,.3);color:var(--green)}
+.badge{background:var(--green);color:#000;border-radius:4px;padding:2px 6px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+.badge-admin{background:var(--gold)}
+.badge-blue{background:var(--blue);color:#000}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:.72rem;font-weight:500}
+.chip-green{background:rgba(0,200,83,.12);color:var(--green)}
+.chip-red{background:rgba(255,68,68,.12);color:var(--red)}
+.chip-blue{background:rgba(79,195,247,.12);color:var(--blue)}
+.chip-gold{background:rgba(255,215,0,.12);color:var(--gold)}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0}
+.loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-size:.9rem}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:2.5rem;margin-bottom:8px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.switch-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+.sw{position:relative;width:44px;height:24px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0}
+.sw-slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:.2s}
+.sw-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s}
+.sw input:checked+.sw-slider{background:var(--green)}
+.sw input:checked+.sw-slider:before{transform:translateX(20px)}
+.type-options{display:flex;gap:8px;margin-bottom:12px}
+.type-opt{flex:1;padding:10px 6px;border:1px solid var(--border);border-radius:8px;text-align:center;cursor:pointer;font-size:.78rem;transition:all .2s;background:transparent;color:var(--text)}
+.type-opt.sel{border-color:var(--green);background:rgba(0,200,83,.1);color:var(--green)}
+.player-row{display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface);border-radius:8px;font-size:.85rem;margin-bottom:4px}
+.weight-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+.weight-row:last-child{border-bottom:none}
+.weight-input{width:64px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:.85rem;text-align:center}
+.weight-pct{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green);width:40px;text-align:right}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:200}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.modal-title{font-weight:600;font-size:1rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.profile-hero{text-align:center;padding:20px 0 10px}
+.profile-av-lg{width:72px;height:72px;border-radius:50%;background:var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;color:#000;margin:0 auto 10px;border:3px solid var(--green)}
+.profile-name{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:2px}
+.profile-badges{display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="loading">⚽ Cargando...</div>
+</div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://ytpnogpjuenvhfdqhwer.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cG5vZ3BqdWVudmhmZHFod2VyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzM4MzksImV4cCI6MjA5MjYwOTgzOX0.VTiH6Fr4dGiEkC5nlszI4lLdQfg1wadF5n1IkLvxAoo'
+);
+
+let STATE = { session: null, profile: null, tab: 'matches', modal: null };
+
+const initials = n => (n||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+const fmtDate = d => new Date(d+'T12:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+const fmtDateLong = d => new Date(d+'T12:00:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+
+// ── RENDER ROOT ──────────────────────────────────────────────────────────────
+async function render() {
+  const app = document.getElementById('app');
+  if (!STATE.session) { app.innerHTML = renderAuth(); bindAuth(); return; }
+  if (!STATE.profile) { app.innerHTML = '<div class="loading">Cargando perfil...</div>'; return; }
+  
+  const isAdmin = STATE.profile.role === 'admin';
+  app.innerHTML = `
+    ${renderHeader()}
+    <div id="tab-content" class="content"></div>
+    ${renderNav(isAdmin)}
+  `;
+  bindNav();
+  await renderTab();
+}
+
+function renderHeader() {
+  const p = STATE.profile;
+  const isAdmin = p?.role === 'admin';
+  return `<div class="header">
+    <span class="header-logo">⚽ CANCHA</span>
+    <div class="header-right">
+      ${isAdmin ? '<span class="badge badge-admin">Admin</span>' : ''}
+      ${p?.guaranteed_access ? '<span class="badge badge-blue">★</span>' : ''}
+      <div class="avatar">${initials(p?.full_name)}</div>
+    </div>
+  </div>`;
+}
+
+function renderNav(isAdmin) {
+  const tabs = [
+    {key:'matches', icon:'⚽', label:'Partidos'},
+    {key:'score',   icon:'🏆', label:'Ranking'},
+    ...(isAdmin ? [{key:'admin', icon:'⚙️', label:'Admin'}] : []),
+    {key:'profile', icon:'👤', label:'Perfil'},
+  ];
+  return `<nav class="nav">${tabs.map(t=>`
+    <button class="nav-item ${STATE.tab===t.key?'active':''}" onclick="setTab('${t.key}')">
+      <span style="font-size:18px">${t.icon}</span><span>${t.label}</span>
+    </button>`).join('')}</nav>`;
+}
+
+function bindNav() {
+  window.setTab = async (t) => { STATE.tab = t; await renderTab(); updateNav(); };
+}
+
+function updateNav() {
+  document.querySelectorAll('.nav-item').forEach(b => {
+    const key = b.getAttribute('onclick').match(/'(\w+)'/)[1];
+    b.classList.toggle('active', key === STATE.tab);
+  });
+}
+
+async function renderTab() {
+  const el = document.getElementById('tab-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading">Cargando...</div>';
+  switch(STATE.tab) {
+    case 'matches': await renderMatches(el); break;
+    case 'score':   await renderScore(el); break;
+    case 'admin':   await renderAdmin(el); break;
+    case 'profile': renderProfile(el); break;
+  }
+}
+
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+function renderAuth() {
+  return `<div class="auth-screen">
+    <div class="auth-logo"><h1>⚽ CANCHA</h1><p>Club de fútbol privado</p></div>
+    <div class="auth-card">
+      <div class="tab-row">
+        <button class="tab-btn active" id="tab-login" onclick="switchAuthTab('login')">Ingresar</button>
+        <button class="tab-btn" id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
+      </div>
+      <div id="auth-alert"></div>
+      <div id="auth-form"></div>
+    </div>
+  </div>`;
+}
+
+function bindAuth() {
+  window.switchAuthTab = (t) => {
+    document.getElementById('tab-login').classList.toggle('active', t==='login');
+    document.getElementById('tab-register').classList.toggle('active', t==='register');
+    document.getElementById('auth-alert').innerHTML = '';
+    document.getElementById('auth-form').innerHTML = t==='login' ? loginForm() : registerForm();
+    bindAuthForms();
+  };
+  window.switchAuthTab('login');
+}
+
+function loginForm() {
+  return `<div class="field"><label>Email</label><input id="a-email" type="email" placeholder="tu@email.com"></div>
+  <div class="field"><label>Contraseña</label><input id="a-pass" type="password" placeholder="••••••••"></div>
+  <button class="btn btn-primary btn-full" id="btn-login">Ingresar</button>`;
+}
+
+function registerForm() {
+  return `<div class="field"><label>Nombre completo</label><input id="a-name" placeholder="Juan Pérez"></div>
+  <div class="field"><label>Apodo (opcional)</label><input id="a-nick" placeholder="Juancho"></div>
+  <div class="field"><label>Email</label><input id="a-email" type="email" placeholder="tu@email.com"></div>
+  <div class="field"><label>Contraseña</label><input id="a-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
+  <button class="btn btn-primary btn-full" id="btn-register">Crear cuenta</button>`;
+}
+
+function bindAuthForms() {
+  const showAlert = (msg, ok) => {
+    document.getElementById('auth-alert').innerHTML = `<div class="alert alert-${ok?'success':'error'}">${msg}</div>`;
+  };
+  const btn = document.getElementById('btn-login');
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'Ingresando...';
+    const {error} = await sb.auth.signInWithPassword({
+      email: document.getElementById('a-email').value,
+      password: document.getElementById('a-pass').value
+    });
+    if (error) { showAlert(error.message, false); btn.disabled=false; btn.textContent='Ingresar'; }
+  };
+  const btnR = document.getElementById('btn-register');
+  if (btnR) btnR.onclick = async () => {
+    btnR.disabled=true; btnR.textContent='Registrando...';
+    const {error} = await sb.auth.signUp({
+      email: document.getElementById('a-email').value,
+      password: document.getElementById('a-pass').value,
+      options: { data: { full_name: document.getElementById('a-name').value, nickname: document.getElementById('a-nick').value } }
+    });
+    if (error) { showAlert(error.message, false); btnR.disabled=false; btnR.textContent='Crear cuenta'; }
+    else showAlert('¡Registro exitoso! Revisa tu email para confirmar tu cuenta.', true);
+  };
+}
+
+// ── MATCHES ──────────────────────────────────────────────────────────────────
+async function renderMatches(el) {
+  const {data: matches} = await sb.from('matches').select('*').order('match_date', {ascending:true});
+  const {data: myRegs} = await sb.from('registrations').select('*').eq('user_id', STATE.session.user.id);
+  const regMap = {};
+  (myRegs||[]).forEach(r => regMap[r.match_id] = r);
+
+  const isAdmin = STATE.profile.role === 'admin';
+  const upcoming = (matches||[]).filter(m => m.status === 'open' || m.status === 'closed');
+  const past = (matches||[]).filter(m => m.status === 'played' || m.status === 'cancelled');
+
+  let html = isAdmin ? `<button class="btn btn-primary btn-full" onclick="openModal('create-match')">+ Nuevo partido</button>` : '';
+
+  if (upcoming.length) {
+    html += `<div class="section-title">Próximos</div>`;
+    for (const m of upcoming) html += await buildMatchCard(m, regMap[m.id], isAdmin);
+  }
+  if (past.length) {
+    html += `<div class="section-title" style="margin-top:8px">Historial</div>`;
+    for (const m of past) html += await buildMatchCard(m, regMap[m.id], isAdmin);
+  }
+  if (!matches?.length) html += `<div class="empty"><div class="empty-icon">⚽</div><p>No hay partidos programados</p></div>`;
+
+  el.innerHTML = html;
+  bindMatchActions();
+}
+
+async function buildMatchCard(m, myReg, isAdmin) {
+  const {count} = await sb.from('registrations').select('id',{count:'exact',head:true}).eq('match_id',m.id).eq('status','confirmed');
+  const pct = Math.min(((count||0)/m.max_players)*100,100);
+  const hasReg = myReg && myReg.status === 'confirmed';
+  const statusLabel = {open:'Abierto',closed:'Cerrado',played:'Jugado',cancelled:'Cancelado'}[m.status]||m.status;
+
+  return `<div class="match-card" data-id="${m.id}">
+    <div class="match-top">
+      <div><div class="match-date">${fmtDate(m.match_date)}</div><div class="match-time">${(m.match_time||'').slice(0,5)}</div></div>
+      <span class="match-status status-${m.status}">${statusLabel}</span>
+    </div>
+    <div class="match-body">
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="match-stats">
+        <span class="match-stat">👥 ${count||0}/${m.max_players}</span>
+        ${m.has_food ? '<span class="match-stat">🍽️ Comida</span>' : ''}
+        ${hasReg ? `<span class="chip chip-green">✓ Inscrito (${myReg.type==='both'?'fútbol+comida':myReg.type==='football'?'fútbol':'comida'})</span>` : ''}
+      </div>
+      <div class="match-actions">
+        <button class="btn btn-outline btn-sm" onclick="openMatchDetail('${m.id}')">Ver detalle</button>
+        ${m.status==='open' && !hasReg ? `<button class="btn btn-primary btn-sm" onclick="openMatchDetail('${m.id}')">Inscribirse</button>` : ''}
+        ${m.status==='open' && hasReg ? `<button class="btn btn-danger btn-sm" onclick="openMatchDetail('${m.id}')">Gestionar</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindMatchActions() {
+  window.openMatchDetail = (id) => { STATE.modal = {type:'match-detail', id}; showModal(); };
+  window.openModal = (type) => { STATE.modal = {type}; showModal(); };
+}
+
+// ── MODAL SYSTEM ─────────────────────────────────────────────────────────────
+async function showModal() {
+  const existing = document.getElementById('modal-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.onclick = e => { if(e.target===overlay) closeModal(); };
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  
+  if (STATE.modal.type === 'match-detail') {
+    modal.innerHTML = await buildMatchDetailModal(STATE.modal.id);
+  } else if (STATE.modal.type === 'create-match') {
+    modal.innerHTML = buildCreateMatchModal();
+  }
+  
+  overlay.appendChild(modal);
+  document.getElementById('app').appendChild(overlay);
+  bindModalActions();
+}
+
+function closeModal() {
+  const el = document.getElementById('modal-overlay');
+  if (el) el.remove();
+  STATE.modal = null;
+}
+
+window.closeModal = closeModal;
+
+async function buildMatchDetailModal(matchId) {
+  const {data: match} = await sb.from('matches').select('*').eq('id', matchId).single();
+  const {data: myReg} = await sb.from('registrations').select('*').eq('match_id', matchId).eq('user_id', STATE.session.user.id).single().catch(()=>({data:null}));
+  const {data: players} = await sb.from('registrations').select('*, profiles(full_name, nickname, guaranteed_access)').eq('match_id', matchId).eq('status','confirmed').order('created_at');
+  
+  const isAdmin = STATE.profile.role === 'admin';
+  const hasReg = myReg && myReg.status === 'confirmed';
+
+  let regSection = '';
+  if (match.status === 'open') {
+    if (!hasReg) {
+      regSection = `<div class="section-title">Inscripción</div>
+        <div class="type-options">
+          ${[['football','⚽ Solo fútbol'],['food','🍽️ Solo comida'],['both','⚽🍽️ Ambas']].map(([v,l])=>
+            `<button class="type-opt ${v==='both'?'sel':''}" data-type="${v}" onclick="selectType(this,'${v}')">${l}</button>`
+          ).join('')}
+        </div>
+        <div class="switch-row">
+          <span style="font-size:.85rem;color:var(--muted)">Viaje de trabajo (sin penalización)</span>
+          <label class="sw"><input type="checkbox" id="work-trip"><span class="sw-slider"></span></label>
+        </div>
+        <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="doRegister('${matchId}')">Confirmar inscripción</button>`;
+    } else {
+      regSection = `<div class="alert alert-success">Inscrito: ${myReg.type==='both'?'Fútbol + Comida':myReg.type==='football'?'Solo Fútbol':'Solo Comida'}</div>
+        <div class="switch-row">
+          <span style="font-size:.85rem;color:var(--muted)">Marcar como viaje de trabajo</span>
+          <label class="sw"><input type="checkbox" id="work-trip"><span class="sw-slider"></span></label>
+        </div>
+        <button class="btn btn-danger btn-full" onclick="doCancel('${matchId}')">Cancelar inscripción</button>
+        <hr class="divider">`;
+    }
+  }
+
+  const playerRows = (players||[]).map((reg, i) => {
+    const p = reg.profiles||{};
+    const name = p.nickname||p.full_name||'—';
+    return `<div class="player-row">
+      <span style="font-family:'Bebas Neue',sans-serif;color:var(--muted);width:20px">${i+1}</span>
+      <div class="score-av" style="width:28px;height:28px;font-size:.7rem">${initials(p.full_name)}</div>
+      <span style="flex:1">${name}</span>
+      ${p.guaranteed_access ? '<span class="chip chip-blue" style="font-size:.65rem">G</span>' : ''}
+      ${reg.arrival_order ? `<span class="chip chip-green">#${reg.arrival_order}</span>` : ''}
+      ${isAdmin ? `<div style="display:flex;gap:4px">
+        ${!reg.arrival_order && match.status==='open' ? `<button class="btn btn-ghost btn-sm" onclick="doCheckin('${matchId}','${reg.user_id}')">In</button>` : ''}
+        ${(reg.type==='football'||reg.type==='both') && !reg.paid_football ? `<button class="btn btn-ghost btn-sm" style="color:var(--gold)" onclick="markPaid('${reg.id}','paid_football')">$⚽</button>` : ''}
+        ${(reg.type==='food'||reg.type==='both') && !reg.paid_food ? `<button class="btn btn-ghost btn-sm" style="color:var(--gold)" onclick="markPaid('${reg.id}','paid_food')">$🍽</button>` : ''}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `<div class="modal-title">
+    <span>${fmtDateLong(match.match_date)} · ${(match.match_time||'').slice(0,5)}</span>
+    <button class="btn btn-ghost" onclick="closeModal()">✕</button>
+  </div>
+  <div id="modal-alert"></div>
+  ${regSection}
+  <div class="section-title" style="margin-top:8px">Jugadores (${(players||[]).length}/${match.max_players})</div>
+  ${playerRows || '<p style="color:var(--muted);font-size:.85rem">Sin inscriptos aún</p>'}
+  ${isAdmin && match.status==='open' ? `<button class="btn btn-outline btn-full" style="margin-top:12px" onclick="closeMatch('${matchId}')">Cerrar partido (marcar jugado)</button>` : ''}`;
+}
+
+function buildCreateMatchModal() {
+  const today = new Date().toISOString().split('T')[0];
+  return `<div class="modal-title"><span>Nuevo partido</span><button class="btn btn-ghost" onclick="closeModal()">✕</button></div>
+  <div id="modal-alert"></div>
+  <div class="grid-2">
+    <div class="field"><label>Fecha</label><input type="date" id="m-date" min="${today}"></div>
+    <div class="field"><label>Hora</label><input type="time" id="m-time" value="10:00"></div>
+  </div>
+  <div class="field"><label>Cupo máximo</label><input type="number" id="m-max" value="14" min="4" max="30"></div>
+  <div class="switch-row">
+    <span>¿Incluye comida posterior?</span>
+    <label class="sw"><input type="checkbox" id="m-food" checked><span class="sw-slider"></span></label>
+  </div>
+  <div class="field" style="margin-top:8px"><label>Notas (opcional)</label><textarea id="m-notes" rows="2" placeholder="Detalles..."></textarea></div>
+  <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="doCreateMatch()">Crear partido</button>`;
+}
+
+function bindModalActions() {
+  window.selectType = (el, type) => {
+    document.querySelectorAll('.type-opt').forEach(b => b.classList.remove('sel'));
+    el.classList.add('sel');
+    el.dataset.selected = 'true';
+    window._selectedType = type;
+  };
+  window._selectedType = 'both';
+
+  window.doRegister = async (matchId) => {
+    const type = window._selectedType || 'both';
+    const workTrip = document.getElementById('work-trip')?.checked || false;
+    const {error} = await sb.from('registrations').upsert({
+      match_id: matchId, user_id: STATE.session.user.id, type, status: 'confirmed',
+      is_work_trip: workTrip, confirmed_at: new Date().toISOString()
+    }, {onConflict:'match_id,user_id'});
+    if (error) { document.getElementById('modal-alert').innerHTML = `<div class="alert alert-error">${error.message}</div>`; return; }
+    closeModal();
+    STATE.tab = 'matches';
+    await renderTab();
+  };
+
+  window.doCancel = async (matchId) => {
+    const workTrip = document.getElementById('work-trip')?.checked || false;
+    await sb.from('registrations').update({status:'cancelled', cancelled_at: new Date().toISOString(), is_work_trip: workTrip}).eq('match_id', matchId).eq('user_id', STATE.session.user.id);
+    closeModal();
+    await renderTab();
+  };
+
+  window.doCheckin = async (matchId, userId) => {
+    const {data: latest} = await sb.from('registrations').select('arrival_order').eq('match_id', matchId).order('arrival_order',{ascending:false}).limit(1);
+    const next = (latest?.[0]?.arrival_order || 0) + 1;
+    await sb.from('registrations').update({arrival_order: next, checked_in_at: new Date().toISOString()}).eq('match_id', matchId).eq('user_id', userId);
+    await showModal();
+  };
+
+  window.markPaid = async (regId, field) => {
+    await sb.from('registrations').update({[field]: true, paid_at: new Date().toISOString()}).eq('id', regId);
+    await showModal();
+  };
+
+  window.closeMatch = async (matchId) => {
+    await sb.from('matches').update({status:'played'}).eq('id', matchId);
+    closeModal();
+    await renderTab();
+  };
+
+  window.doCreateMatch = async () => {
+    const date = document.getElementById('m-date').value;
+    if (!date) { document.getElementById('modal-alert').innerHTML = '<div class="alert alert-error">Selecciona una fecha</div>'; return; }
+    const {error} = await sb.from('matches').insert({
+      match_date: date,
+      match_time: document.getElementById('m-time').value,
+      max_players: parseInt(document.getElementById('m-max').value),
+      has_food: document.getElementById('m-food').checked,
+      notes: document.getElementById('m-notes').value,
+      created_by: STATE.session.user.id
+    });
+    if (error) { document.getElementById('modal-alert').innerHTML = `<div class="alert alert-error">${error.message}</div>`; return; }
+    closeModal();
+    await renderTab();
+  };
+}
+
+// ── SCORE ─────────────────────────────────────────────────────────────────────
+async function renderScore(el) {
+  const {data: profiles} = await sb.from('profiles').select('*').eq('is_active', true);
+  const {data: config} = await sb.from('scoring_config').select('*').eq('is_active', true).limit(1);
+  const cfg = config?.[0] || {rolling_weeks:8, advance_notice_hours:24, weight_seniority:20, weight_attendance:20, weight_advance_notice:20, weight_payment:15, weight_frequency:15, weight_arrival:5, weight_streak:5};
+  const {data: allRegs} = await sb.from('registrations').select('*, matches(match_date, status)');
+  
+  const rollStart = new Date();
+  rollStart.setDate(rollStart.getDate() - cfg.rolling_weeks * 7);
+
+  const scored = (profiles||[]).map(p => {
+    const regs = (allRegs||[]).filter(r => r.user_id === p.id);
+    const recent = regs.filter(r => r.matches && new Date(r.matches.match_date) >= rollStart);
+    const played = recent.filter(r => r.matches?.status === 'played');
+    const confirmed = played.filter(r => r.status === 'confirmed' && !r.is_work_trip);
+    const checkedIn = confirmed.filter(r => r.arrival_order != null);
+    const cancelled = recent.filter(r => r.status === 'cancelled' && !r.is_work_trip);
+    const timely = cancelled.filter(r => {
+      if (!r.cancelled_at || !r.matches?.match_date) return false;
+      return (new Date(r.matches.match_date) - new Date(r.cancelled_at)) / 36e5 >= cfg.advance_notice_hours;
+    });
+    const paid = played.filter(r => r.paid_football || r.paid_food);
+    const months = Math.min(24, (Date.now() - new Date(p.join_date)) / (1000*60*60*24*30.5));
+
+    const s = {
+      seniority: (months/24)*100,
+      attendance: confirmed.length > 0 ? (checkedIn.length/confirmed.length)*100 : 50,
+      notice: cancelled.length > 0 ? (timely.length/cancelled.length)*100 : 100,
+      pay: played.length > 0 ? (paid.length/played.length)*100 : 50,
+      freq: played.length > 0 ? Math.min((confirmed.length/played.length)*100,100) : 50,
+      arrival: (() => { const arr = confirmed.filter(r=>r.arrival_order!=null).map(r=>r.arrival_order); return arr.length ? Math.max(0,100-(arr.reduce((a,b)=>a+b,0)/arr.length-1)*7) : 50; })(),
+      streak: Math.min(confirmed.length*12.5, 100)
+    };
+
+    const total =
+      s.seniority * cfg.weight_seniority / 100 +
+      s.attendance * cfg.weight_attendance / 100 +
+      s.notice * cfg.weight_advance_notice / 100 +
+      s.pay * cfg.weight_payment / 100 +
+      s.freq * cfg.weight_frequency / 100 +
+      s.arrival * cfg.weight_arrival / 100 +
+      s.streak * cfg.weight_streak / 100;
+
+    return { ...p, score: Math.round(total*10)/10, s };
+  });
+
+  scored.sort((a,b) => {
+    if (a.guaranteed_access && !b.guaranteed_access) return -1;
+    if (!a.guaranteed_access && b.guaranteed_access) return 1;
+    return b.score - a.score;
+  });
+
+  const maxScore = scored[0]?.score || 100;
+  const myId = STATE.session.user.id;
+
+  el.innerHTML = `<div class="card">
+    <div class="card-header"><div><div class="card-title">Ranking · últimas ${cfg.rolling_weeks} semanas</div></div><span>🏆</span></div>
+    ${scored.map((p,i) => `<div class="score-row">
+      <span class="score-rank ${i<3?'top':''}">${p.guaranteed_access ? '★' : i+1}</span>
+      <div class="score-av">${initials(p.full_name)}</div>
+      <div class="score-info">
+        <div class="score-name">${p.nickname||p.full_name}${p.id===myId?' (tú)':''}</div>
+        <div class="score-detail">Asist: ${Math.round(p.s.attendance)}% · Aviso: ${Math.round(p.s.notice)}% · Pago: ${Math.round(p.s.pay)}%</div>
+        <div class="score-bar"><div class="score-bar-fill" style="width:${(p.score/maxScore)*100}%"></div></div>
+      </div>
+      <div style="text-align:right">
+        <div class="score-val">${p.score}</div>
+        ${p.guaranteed_access ? '<span class="chip chip-blue" style="font-size:.62rem">Garantizado</span>' : ''}
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
+async function renderAdmin(el) {
+  const {data: cfgArr} = await sb.from('scoring_config').select('*').eq('is_active', true).limit(1);
+  const cfg = cfgArr?.[0];
+  const {data: members} = await sb.from('profiles').select('*').order('full_name');
+
+  window._adminCfg = { ...cfg };
+  window._adminTab = window._adminTab || 'weights';
+
+  const weightFields = [
+    ['weight_seniority','Antigüedad'],['weight_attendance','Asistencia efectiva'],
+    ['weight_advance_notice','Aviso con anticipación'],['weight_payment','Puntualidad de pago'],
+    ['weight_frequency','Frecuencia'],['weight_arrival','Orden de llegada'],['weight_streak','Racha activa']
+  ];
+
+  const total = weightFields.reduce((s,[k])=>s+(parseFloat(window._adminCfg[k])||0),0);
+  const totalOk = Math.abs(total-100) < 0.1;
+
+  const guaranteed = (members||[]).filter(m=>m.guaranteed_access).length;
+
+  el.innerHTML = `
+  <div id="admin-alert"></div>
+  <div style="display:flex;gap:8px;margin-bottom:4px">
+    ${[['weights','Pesos Score'],['members','Participantes']].map(([k,l])=>`
+      <button onclick="switchAdminTab('${k}')" style="flex:1;padding:8px;border-radius:8px;background:${window._adminTab===k?'var(--green)':'var(--card)'};color:${window._adminTab===k?'#000':'var(--muted)'};border:1px solid var(--border);cursor:pointer;font-family:Inter;font-weight:600">${l}</button>`
+    ).join('')}
+  </div>
+  <div id="admin-section">
+  ${window._adminTab === 'weights' ? `<div class="card">
+    <div class="card-title" style="margin-bottom:12px">Pesos del scoring</div>
+    ${weightFields.map(([k,l])=>`<div class="weight-row">
+      <span style="flex:1;font-size:.85rem">${l}</span>
+      <input class="weight-input" type="number" min="0" max="100" value="${window._adminCfg[k]||0}" oninput="updateWeight('${k}',this.value)">
+      <span class="weight-pct">${window._adminCfg[k]||0}%</span>
+    </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface);border-radius:8px;margin-top:8px">
+      <span style="color:var(--muted)">Total</span>
+      <span style="font-weight:600;color:${totalOk?'var(--green)':'var(--red)'}" id="weight-total">${total.toFixed(1)}%${totalOk?' ✓':' (debe ser 100%)'}</span>
+    </div>
+    <hr class="divider">
+    <div class="field"><label>Horas mínimas de aviso</label><input type="number" id="adv-hours" value="${cfg?.advance_notice_hours||24}" min="1" max="168"></div>
+    <div class="field"><label>Ventana rolling (semanas)</label><input type="number" id="roll-weeks" value="${cfg?.rolling_weeks||8}" min="4" max="16"></div>
+    <button class="btn btn-primary btn-full" onclick="saveAdminConfig('${cfg?.id}')">Guardar configuración</button>
+  </div>` : `<div class="card">
+    <div class="card-header"><div class="card-title">Participantes</div><span style="color:var(--muted);font-size:.8rem">${guaranteed}/5 garantizados</span></div>
+    ${(members||[]).map(m=>`<div class="score-row" style="padding:10px 0">
+      <div class="score-av">${initials(m.full_name)}</div>
+      <div class="score-info">
+        <div class="score-name">${m.nickname||m.full_name}</div>
+        <div style="display:flex;gap:4px;margin-top:3px">
+          ${m.role==='admin'?'<span class="chip chip-gold">Admin</span>':''}
+          ${m.guaranteed_access?'<span class="chip chip-blue">Garantizado</span>':''}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="btn btn-outline btn-sm" style="font-size:.72rem" onclick="toggleMemberRole('${m.id}','${m.role}')">${m.role==='admin'?'Quitar admin':'Hacer admin'}</button>
+        <button class="btn btn-outline btn-sm" style="font-size:.72rem;border-color:${m.guaranteed_access?'var(--blue)':'var(--border)'}" onclick="toggleGuaranteed('${m.id}',${m.guaranteed_access},${guaranteed})">${m.guaranteed_access?'Quitar garantía':'Garantizar'}</button>
+      </div>
+    </div>`).join('')}
+  </div>`}
+  </div>`;
+
+  window.switchAdminTab = (t) => { window._adminTab = t; renderAdmin(el); };
+  window.updateWeight = (k, v) => {
+    window._adminCfg[k] = parseFloat(v)||0;
+    const t = weightFields.reduce((s,[fk])=>s+(parseFloat(window._adminCfg[fk])||0),0);
+    const ok = Math.abs(t-100)<0.1;
+    const el2 = document.getElementById('weight-total');
+    if(el2){ el2.textContent = `${t.toFixed(1)}%${ok?' ✓':' (debe ser 100%)'}`; el2.style.color=ok?'var(--green)':'var(--red)'; }
+  };
+  window.saveAdminConfig = async (cfgId) => {
+    const t = weightFields.reduce((s,[k])=>s+(parseFloat(window._adminCfg[k])||0),0);
+    if(Math.abs(t-100)>0.1){ document.getElementById('admin-alert').innerHTML='<div class="alert alert-error">Los pesos deben sumar 100%</div>'; return; }
+    const update = { ...window._adminCfg, advance_notice_hours: parseInt(document.getElementById('adv-hours').value), rolling_weeks: parseInt(document.getElementById('roll-weeks').value), updated_by: STATE.session.user.id, updated_at: new Date().toISOString() };
+    await sb.from('scoring_config').update(update).eq('id', cfgId);
+    document.getElementById('admin-alert').innerHTML='<div class="alert alert-success">Guardado ✓</div>';
+    setTimeout(()=>{ const a=document.getElementById('admin-alert'); if(a) a.innerHTML=''; }, 3000);
+  };
+  window.toggleMemberRole = async (uid, role) => {
+    await sb.from('profiles').update({role: role==='admin'?'member':'admin'}).eq('id',uid);
+    renderAdmin(el);
+  };
+  window.toggleGuaranteed = async (uid, current, count) => {
+    if (!current && count >= 5) { document.getElementById('admin-alert').innerHTML='<div class="alert alert-error">Máximo 5 accesos garantizados</div>'; setTimeout(()=>{ const a=document.getElementById('admin-alert'); if(a) a.innerHTML=''; },3000); return; }
+    await sb.from('profiles').update({guaranteed_access: !current}).eq('id',uid);
+    renderAdmin(el);
+  };
+}
+
+// ── PROFILE ───────────────────────────────────────────────────────────────────
+function renderProfile(el) {
+  const p = STATE.profile;
+  el.innerHTML = `<div class="profile-hero">
+    <div class="profile-av-lg">${initials(p?.full_name)}</div>
+    <div class="profile-name">${p?.nickname||p?.full_name||'—'}</div>
+    <div class="profile-badges">
+      ${p?.role==='admin'?'<span class="badge badge-admin">Admin</span>':''}
+      ${p?.guaranteed_access?'<span class="badge badge-blue">Acceso Garantizado</span>':''}
+      <span class="badge">Desde ${p?.join_date?new Date(p.join_date+'T12:00:00').getFullYear():'—'}</span>
+    </div>
+  </div>
+  <div id="profile-alert"></div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px">Mis datos</div>
+    <div class="field"><label>Nombre completo</label><input id="p-name" value="${p?.full_name||''}"></div>
+    <div class="field"><label>Apodo</label><input id="p-nick" value="${p?.nickname||''}"></div>
+    <div class="field"><label>Teléfono</label><input type="tel" id="p-phone" value="${p?.phone||''}" placeholder="+52 55 0000 0000"></div>
+    <button class="btn btn-primary btn-full" onclick="saveProfile()">Guardar cambios</button>
+  </div>
+  <button class="btn btn-danger btn-full" onclick="doLogout()">↩ Cerrar sesión</button>`;
+
+  window.saveProfile = async () => {
+    await sb.from('profiles').update({
+      full_name: document.getElementById('p-name').value,
+      nickname: document.getElementById('p-nick').value,
+      phone: document.getElementById('p-phone').value,
+      updated_at: new Date().toISOString()
+    }).eq('id', STATE.session.user.id);
+    const {data} = await sb.from('profiles').select('*').eq('id',STATE.session.user.id).single();
+    STATE.profile = data;
+    document.getElementById('profile-alert').innerHTML='<div class="alert alert-success">Perfil actualizado ✓</div>';
+    setTimeout(()=>renderProfile(el), 2000);
+  };
+  window.doLogout = () => sb.auth.signOut();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const {data: {session}} = await sb.auth.getSession();
+  STATE.session = session;
+  if (session) {
+    const {data} = await sb.from('profiles').select('*').eq('id',session.user.id).single();
+    STATE.profile = data;
+  }
+  await render();
+
+  sb.auth.onAuthStateChange(async (_event, session) => {
+    STATE.session = session;
+    if (session) {
+      const {data} = await sb.from('profiles').select('*').eq('id',session.user.id).single();
+      STATE.profile = data;
+    } else {
+      STATE.profile = null;
+    }
+    await render();
+  });
+}
+
+init();
+</script>
+</body>
+</html>
