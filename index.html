@@ -289,9 +289,6 @@ function bindAuthForms(){
       }
       showAlert('¡Bienvenido! Ingresa con tu email y contraseña.',true);
       btnR.disabled=false; btnR.textContent='Crear cuenta';
-      // Play welcome audio
-      const displayName = nick || name.split(' ')[0];
-      setTimeout(()=>playWelcome(displayName), 500);
     }
   };
 }
