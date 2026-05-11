@@ -793,7 +793,7 @@ async function renderAdmin(el){
       </div>
     </div>`).join('')}
   </div>`}
-  ${window._adminTab==='codes'?`<div id='codes-section'></div>`:''}
+  ${window._adminTab==='codes'?"<div id='codes-section'></div>":''}
   </div>`;
 
   window.switchAdminTab=async(t)=>{
@@ -862,23 +862,25 @@ async function loadCodesSection(){
   const el=document.getElementById('codes-section');
   if(!el)return;
   const {data:codes}=await sb.from('invite_codes').select('*').order('created_at',{ascending:false});
-  const rows=(codes||[]).map(c=>{
+  
+  let rows='';
+  (codes||[]).forEach(c=>{
     const activeColor=c.is_active?'var(--green)':'var(--muted)';
     const btnColor=c.is_active?'var(--red)':'var(--green)';
     const btnLabel=c.is_active?'Desactivar':'Activar';
     const usos='Usos: '+c.uses_count+(c.max_uses?'/'+c.max_uses:' (ilimitado)');
     const vence=c.expires_at?' · Vence: '+new Date(c.expires_at).toLocaleDateString('es-MX'):'';
-    return '<div class="score-row" style="padding:10px 0">'+
+    rows+='<div class="score-row" style="padding:10px 0">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:1px;color:'+activeColor+'">'+c.code+'</div>'+
         '<div style="font-size:.72rem;color:var(--muted)">'+usos+vence+'</div>'+
       '</div>'+
       '<div style="display:flex;gap:4px">'+
-        '<button class="btn btn-outline btn-sm" style="border-color:'+btnColor+';color:'+btnColor+'" onclick="toggleCode(''+c.id+'','+c.is_active+')">'+btnLabel+'</button>'+
-        '<button class="btn btn-ghost btn-sm" onclick="deleteCode(''+c.id+'')">🗑️</button>'+
+        '<button class="btn btn-outline btn-sm" style="border-color:'+btnColor+';color:'+btnColor+'" data-id="'+c.id+'" data-active="'+c.is_active+'" onclick="toggleCode(this)">'+btnLabel+'</button>'+
+        '<button class="btn btn-ghost btn-sm" data-id="'+c.id+'" onclick="deleteCode(this)">🗑️</button>'+
       '</div>'+
     '</div>';
-  }).join('');
+  });
 
   el.innerHTML='<div class="card" style="margin-top:12px">'+
     '<div class="card-header"><div class="card-title">Códigos de invitación</div></div>'+
@@ -891,25 +893,35 @@ async function loadCodesSection(){
     '<hr class="divider">'+
     (rows||'<p style="color:var(--muted);font-size:.85rem;text-align:center;padding:16px">No hay códigos</p>')+
   '</div>';
-
-  window.createCode=async()=>{
-    const code=document.getElementById('new-code').value.trim().toUpperCase();
-    if(!code){alert('Ingresa un código');return;}
-    const maxUses=document.getElementById('new-max').value;
-    const exp=document.getElementById('new-exp').value;
-    await sb.from('invite_codes').insert({code,created_by:STATE.session.user.id,max_uses:maxUses?parseInt(maxUses):null,expires_at:exp?new Date(exp+'T23:59:59').toISOString():null});
-    await loadCodesSection();
-  };
-  window.toggleCode=async(id,current)=>{
-    await sb.from('invite_codes').update({is_active:!current}).eq('id',id);
-    await loadCodesSection();
-  };
-  window.deleteCode=async(id)=>{
-    if(!confirm('¿Eliminar este código?'))return;
-    await sb.from('invite_codes').delete().eq('id',id);
-    await loadCodesSection();
-  };
 }
+
+window.createCode=async()=>{
+  const code=document.getElementById('new-code').value.trim().toUpperCase();
+  if(!code){alert('Ingresa un código');return;}
+  const maxUses=document.getElementById('new-max').value;
+  const exp=document.getElementById('new-exp').value;
+  await sb.from('invite_codes').insert({
+    code,
+    created_by:STATE.session.user.id,
+    max_uses:maxUses?parseInt(maxUses):null,
+    expires_at:exp?new Date(exp+'T23:59:59').toISOString():null
+  });
+  await loadCodesSection();
+};
+
+window.toggleCode=async(btn)=>{
+  const id=btn.dataset.id;
+  const current=btn.dataset.active==='true';
+  await sb.from('invite_codes').update({is_active:!current}).eq('id',id);
+  await loadCodesSection();
+};
+
+window.deleteCode=async(btn)=>{
+  if(!confirm('¿Eliminar este código?'))return;
+  const id=btn.dataset.id;
+  await sb.from('invite_codes').delete().eq('id',id);
+  await loadCodesSection();
+};
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
