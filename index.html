@@ -437,7 +437,7 @@ async function buildMatchDetailModal(matchId){
 
   let regSection='';
   if(match.status==='open'){
-    if(!hasReg){
+    if(!hasReg&&!isAbsent){
       const cupoFull=(totalCount||0)>=maxTotal;
       if(cupoFull){
         regSection=`<div class="alert alert-error">⛔ Cupo máximo del evento alcanzado (${maxTotal} personas)</div>`;
@@ -456,7 +456,7 @@ async function buildMatchDetailModal(matchId){
           <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="doRegister('${matchId}')">Confirmar inscripción</button>
         </div>`;
       }
-    } else if(isAbsentJustified) {
+    } else if(isAbsent) {
       regSection=`<div class="alert" style="background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);color:var(--gold)">✈️ Avisaste ausencia justificada — no ocupa lugar en el cupo</div>
       <button class="btn btn-outline btn-full" style="border-color:var(--gold);color:var(--gold)" onclick="doCancel('${matchId}')">Cancelar aviso de ausencia</button>
       <hr class="divider">`;
