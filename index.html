@@ -258,7 +258,8 @@ function bindAuth() {
 function loginForm(){return`<div class="field"><label>Email</label><input id="a-email" type="email" placeholder="tu@email.com"></div>
 <div class="field"><label>Contraseña</label><input id="a-pass" type="password" placeholder="••••••••"></div>
 <button class="btn btn-primary btn-full" id="btn-login">Ingresar</button>`;}
-function registerForm(){return`<div class="field"><label>Nombre completo</label><input id="a-name" placeholder="Juan Pérez"></div>
+function registerForm(){return`<div class="field"><label>Código de invitación</label><input id="a-code" placeholder="Ej. REALFC-2026" oninput="this.value=this.value.toUpperCase()"></div>
+<div class="field"><label>Nombre completo</label><input id="a-name" placeholder="Juan Pérez"></div>
 <div class="field"><label>Apodo (opcional)</label><input id="a-nick" placeholder="Juancho"></div>
 <div class="field"><label>Email</label><input id="a-email" type="email" placeholder="tu@email.com"></div>
 <div class="field"><label>Contraseña</label><input id="a-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
@@ -273,8 +274,17 @@ function bindAuthForms(){
   };
   const btnR=document.getElementById('btn-register');
   if(btnR) btnR.onclick=async()=>{
-    btnR.disabled=true; btnR.textContent='Registrando...';
-    const name=document.getElementById('a-name').value;
+    const code=document.getElementById('a-code').value.trim().toUpperCase();
+    const name=document.getElementById('a-name').value.trim();
+    if(!code){showAlert('Ingresa el código de invitación',false);return;}
+    if(!name){showAlert('Ingresa tu nombre completo',false);return;}
+    btnR.disabled=true; btnR.textContent='Verificando...';
+    // Validar código
+    const {data:codeData,error:codeErr}=await sb.from('invite_codes').select('*').eq('code',code).eq('is_active',true).maybeSingle();
+    if(codeErr||!codeData){showAlert('Código de invitación inválido o inactivo',false);btnR.disabled=false;btnR.textContent='Crear cuenta';return;}
+    if(codeData.expires_at&&new Date(codeData.expires_at)<new Date()){showAlert('El código de invitación ha expirado',false);btnR.disabled=false;btnR.textContent='Crear cuenta';return;}
+    if(codeData.max_uses&&codeData.uses_count>=codeData.max_uses){showAlert('El código de invitación ya alcanzó el límite de usos',false);btnR.disabled=false;btnR.textContent='Crear cuenta';return;}
+    btnR.textContent='Registrando...';
     const nick=document.getElementById('a-nick').value;
     const {data,error}=await sb.auth.signUp({
       email:document.getElementById('a-email').value,
@@ -283,9 +293,10 @@ function bindAuthForms(){
     });
     if(error){showAlert(error.message,false);btnR.disabled=false;btnR.textContent='Crear cuenta';}
     else{
-      // Create profile manually in case trigger fails
       if(data.user){
         await sb.from('profiles').upsert({id:data.user.id,full_name:name||data.user.email.split('@')[0],nickname:nick||null,join_date:new Date().toISOString().split('T')[0]},{onConflict:'id'});
+        // Incrementar contador de usos del código
+        await sb.from('invite_codes').update({uses_count:codeData.uses_count+1}).eq('id',codeData.id);
       }
       showAlert('¡Bienvenido! Ingresa con tu email y contraseña.',true);
       btnR.disabled=false; btnR.textContent='Crear cuenta';
@@ -478,7 +489,7 @@ async function buildMatchDetailModal(matchId){
   <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">🟢 Titular (1-${maxFoot}) · 🟡 Lista de espera</div>
   ${playerRows||'<p style="color:var(--muted);font-size:.85rem">Sin inscriptos aún</p>'}
   ${isAdmin?`<hr class="divider">
-    ${deadlinePassed&&!(players||[]).every(r=>r.priority_number)?`<button class="btn btn-outline btn-full" style="margin-bottom:8px" onclick="assignPriorities('${matchId}')">⚡ Asignar números de prioridad</button>`:''}
+    
     ${deadlinePassed?`<button class="btn btn-outline btn-full" style="margin-bottom:8px;border-color:var(--blue);color:var(--blue)" onclick="downloadPDF('${matchId}')">📄 Descargar lista PDF</button>`:''}
     ${match.status==='open'?`<button class="btn btn-outline btn-full" onclick="closeMatch('${matchId}')">Cerrar partido (marcar jugado)</button>`:''}
   `:''}`;
@@ -745,7 +756,7 @@ async function renderAdmin(el){
 
   el.innerHTML=`<div id="admin-alert"></div>
   <div style="display:flex;gap:8px;margin-bottom:4px">
-    ${[['weights','Pesos Score'],['members','Participantes']].map(([k,l])=>
+    ${[['weights','Pesos Score'],['members','Participantes'],['codes','Códigos']].map(([k,l])=>
       `<button onclick="switchAdminTab('${k}')" style="flex:1;padding:8px;border-radius:8px;background:${window._adminTab===k?'var(--green)':'var(--card)'};color:${window._adminTab===k?'#000':'var(--muted)'};border:1px solid var(--border);cursor:pointer;font-family:Inter;font-weight:600">${l}</button>`
     ).join('')}
   </div>
@@ -782,9 +793,14 @@ async function renderAdmin(el){
       </div>
     </div>`).join('')}
   </div>`}
+  ${window._adminTab==='codes'?`<div id='codes-section'></div>`:''}
   </div>`;
 
-  window.switchAdminTab=t=>{window._adminTab=t;renderAdmin(el);};
+  window.switchAdminTab=async(t)=>{
+    window._adminTab=t;
+    if(t==='codes'){await renderAdmin(el);}
+    else{renderAdmin(el);}
+  };
   window.updateWeight=(k,v)=>{
     window._adminCfg[k]=parseFloat(v)||0;
     const t=weightFields.reduce((s,[fk])=>s+(parseFloat(window._adminCfg[fk])||0),0);
@@ -800,6 +816,7 @@ async function renderAdmin(el){
     document.getElementById('admin-alert').innerHTML='<div class="alert alert-success">Guardado ✓</div>';
     setTimeout(()=>{const a=document.getElementById('admin-alert');if(a)a.innerHTML='';},3000);
   };
+  if(window._adminTab==='codes')setTimeout(loadCodesSection,50);
   window.toggleMemberRole=async(uid,role)=>{await sb.from('profiles').update({role:role==='admin'?'member':'admin'}).eq('id',uid);renderAdmin(el);};
   window.toggleGuaranteed=async(uid,current,count)=>{
     if(!current&&count>=5){document.getElementById('admin-alert').innerHTML='<div class="alert alert-error">Máximo 5 accesos garantizados</div>';setTimeout(()=>{const a=document.getElementById('admin-alert');if(a)a.innerHTML='';},3000);return;}
@@ -837,6 +854,61 @@ function renderProfile(el){
     setTimeout(()=>renderProfile(el),2000);
   };
   window.doLogout=()=>sb.auth.signOut();
+}
+
+
+// ── CODES ────────────────────────────────────────────────────────────────────
+async function loadCodesSection(){
+  const el=document.getElementById('codes-section');
+  if(!el)return;
+  const {data:codes}=await sb.from('invite_codes').select('*').order('created_at',{ascending:false});
+  const rows=(codes||[]).map(c=>{
+    const activeColor=c.is_active?'var(--green)':'var(--muted)';
+    const btnColor=c.is_active?'var(--red)':'var(--green)';
+    const btnLabel=c.is_active?'Desactivar':'Activar';
+    const usos='Usos: '+c.uses_count+(c.max_uses?'/'+c.max_uses:' (ilimitado)');
+    const vence=c.expires_at?' · Vence: '+new Date(c.expires_at).toLocaleDateString('es-MX'):'';
+    return '<div class="score-row" style="padding:10px 0">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:1px;color:'+activeColor+'">'+c.code+'</div>'+
+        '<div style="font-size:.72rem;color:var(--muted)">'+usos+vence+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:4px">'+
+        '<button class="btn btn-outline btn-sm" style="border-color:'+btnColor+';color:'+btnColor+'" onclick="toggleCode(''+c.id+'','+c.is_active+')">'+btnLabel+'</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="deleteCode(''+c.id+'')">🗑️</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML='<div class="card" style="margin-top:12px">'+
+    '<div class="card-header"><div class="card-title">Códigos de invitación</div></div>'+
+    '<div class="field"><label>Nuevo código</label><input id="new-code" placeholder="Ej. AMIGOS-2026" oninput="this.value=this.value.toUpperCase()"></div>'+
+    '<div class="grid-2">'+
+      '<div class="field"><label>Máx. usos (vacío=ilimitado)</label><input id="new-max" type="number" min="1" placeholder="∞"></div>'+
+      '<div class="field"><label>Vence (opcional)</label><input id="new-exp" type="date"></div>'+
+    '</div>'+
+    '<button class="btn btn-primary btn-full" onclick="createCode()">+ Crear código</button>'+
+    '<hr class="divider">'+
+    (rows||'<p style="color:var(--muted);font-size:.85rem;text-align:center;padding:16px">No hay códigos</p>')+
+  '</div>';
+
+  window.createCode=async()=>{
+    const code=document.getElementById('new-code').value.trim().toUpperCase();
+    if(!code){alert('Ingresa un código');return;}
+    const maxUses=document.getElementById('new-max').value;
+    const exp=document.getElementById('new-exp').value;
+    await sb.from('invite_codes').insert({code,created_by:STATE.session.user.id,max_uses:maxUses?parseInt(maxUses):null,expires_at:exp?new Date(exp+'T23:59:59').toISOString():null});
+    await loadCodesSection();
+  };
+  window.toggleCode=async(id,current)=>{
+    await sb.from('invite_codes').update({is_active:!current}).eq('id',id);
+    await loadCodesSection();
+  };
+  window.deleteCode=async(id)=>{
+    if(!confirm('¿Eliminar este código?'))return;
+    await sb.from('invite_codes').delete().eq('id',id);
+    await loadCodesSection();
+  };
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
