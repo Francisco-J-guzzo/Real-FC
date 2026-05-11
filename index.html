@@ -330,6 +330,8 @@ async function buildMatchCard(m,myReg,isAdmin){
   const pctFoot=Math.min(((footCount||0)/maxFoot)*100,100);
   const pctTotal=Math.min(((totalCount||0)/maxTotal)*100,100);
   const hasReg=myReg&&myReg.status==='confirmed';
+  const isAbsentJustified=myReg&&myReg.status==='absent_justified';
+  const isAbsent=myReg&&myReg.status==='absent_justified';
   const statusLabel={open:'Abierto',closed:'Cerrado',played:'Jugado',cancelled:'Cancelado'}[m.status]||m.status;
 
   // Deadline info
@@ -375,11 +377,12 @@ async function buildMatchCard(m,myReg,isAdmin){
       <div class="match-stats" style="margin-top:8px">
         ${m.has_food?'<span class="match-stat">🍽️ Comida</span>':''}
         ${hasReg?`<span class="chip chip-green">✓ Inscrito (${myReg.type==='both'?'fútbol+comida':myReg.type==='football'?'fútbol':'comida'})</span>`:''}
+        ${isAbsent?`<span class="chip chip-gold">✈️ Ausencia justificada</span>`:''}
       </div>
       <div class="match-actions">
         <button class="btn btn-outline btn-sm" onclick="openMatchDetail('${m.id}')">Ver detalle</button>
         ${m.status==='open'&&!hasReg?`<button class="btn btn-primary btn-sm" onclick="openMatchDetail('${m.id}')">Inscribirse</button>`:''}
-        ${m.status==='open'&&hasReg?`<button class="btn btn-danger btn-sm" onclick="openMatchDetail('${m.id}')">Gestionar</button>`:''}
+        ${m.status==='open'&&(hasReg||isAbsent)?`<button class="btn btn-danger btn-sm" onclick="openMatchDetail('${m.id}')">Gestionar</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-match','${m.id}')">✏️</button>`:''}
       </div>
     </div>
@@ -421,6 +424,7 @@ async function buildMatchDetailModal(matchId){
 
   const isAdmin=STATE.profile.role==='admin';
   const hasReg=myReg&&myReg.status==='confirmed';
+  const isAbsent=myReg&&myReg.status==='absent_justified';
   const maxFoot=match.max_players||18;
   const maxTotal=match.max_total||30;
   const {count:totalCount}=await sb.from('registrations').select('id',{count:'exact',head:true}).eq('match_id',matchId).eq('status','confirmed');
@@ -440,11 +444,17 @@ async function buildMatchDetailModal(matchId){
           ).join('')}
         </div>
         <div class="switch-row">
-          <span style="font-size:.85rem;color:var(--muted)">Viaje de trabajo (sin penalización)</span>
-          <label class="sw"><input type="checkbox" id="work-trip"><span class="sw-slider"></span></label>
+          <span style="font-size:.85rem;color:var(--muted)">Viaje de trabajo (ausencia justificada)</span>
+          <label class="sw"><input type="checkbox" id="work-trip" onchange="toggleWorkTripBtn('${matchId}')"><span class="sw-slider"></span></label>
         </div>
-        <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="doRegister('${matchId}')">Confirmar inscripción</button>`;
+        <div id="reg-btn-container">
+          <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="doRegister('${matchId}')">Confirmar inscripción</button>
+        </div>`;
       }
+    } else if(isAbsentJustified) {
+      regSection=`<div class="alert" style="background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);color:var(--gold)">✈️ Avisaste ausencia justificada — no ocupa lugar en el cupo</div>
+      <button class="btn btn-outline btn-full" style="border-color:var(--gold);color:var(--gold)" onclick="doCancel('${matchId}')">Cancelar aviso de ausencia</button>
+      <hr class="divider">`;
     } else {
       const maxP=match.max_players||18;
       const isIn=myReg.priority_number&&myReg.priority_number<=maxP;
@@ -533,12 +543,25 @@ function bindModalActions(){
   window.doRegister=async(matchId)=>{
     const type=window._selectedType||'both';
     const workTrip=document.getElementById('work-trip')?.checked||false;
+    const status=workTrip?'absent_justified':'confirmed';
     const {error}=await sb.from('registrations').upsert({
-      match_id:matchId,user_id:STATE.session.user.id,type,status:'confirmed',
+      match_id:matchId,user_id:STATE.session.user.id,type,status,
       is_work_trip:workTrip,confirmed_at:new Date().toISOString()
     },{onConflict:'match_id,user_id'});
     if(error){document.getElementById('modal-alert').innerHTML=`<div class="alert alert-error">${error.message}</div>`;return;}
     closeModal(); STATE.tab='matches'; await renderTab();
+  };
+
+  window.toggleWorkTripBtn=async(matchId)=>{
+    const isWorkTrip=document.getElementById('work-trip')?.checked||false;
+    const container=document.getElementById('reg-btn-container');
+    if(!container)return;
+    if(isWorkTrip){
+      container.innerHTML=`<button class="btn btn-outline btn-full" style="margin-top:10px;border-color:var(--gold);color:var(--gold)" onclick="doRegister('${matchId}')">✈️ Avisar ausencia justificada</button>
+      <p style="font-size:.75rem;color:var(--muted);margin-top:6px;text-align:center">No ocupará lugar en el cupo. No penaliza el scoring.</p>`;
+    } else {
+      container.innerHTML=`<button class="btn btn-primary btn-full" style="margin-top:10px" onclick="doRegister('${matchId}')">Confirmar inscripción</button>`;
+    }
   };
 
   window.doCancel=async(matchId)=>{
