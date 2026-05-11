@@ -307,7 +307,7 @@ function bindAuthForms(){
 // ── MATCHES ──────────────────────────────────────────────────────────────────
 async function renderMatches(el) {
   const {data:matches}=await sb.from('matches').select('*').order('match_date',{ascending:true});
-  const {data:myRegs}=await sb.from('registrations').select('*').eq('user_id',STATE.session.user.id);
+  const {data:myRegs}=await sb.from('registrations').select('*').eq('user_id',STATE.session.user.id).in('status',['confirmed','absent_justified']);
   const regMap={};
   (myRegs||[]).forEach(r=>regMap[r.match_id]=r);
   const isAdmin=STATE.profile.role==='admin';
@@ -330,7 +330,6 @@ async function buildMatchCard(m,myReg,isAdmin){
   const pctFoot=Math.min(((footCount||0)/maxFoot)*100,100);
   const pctTotal=Math.min(((totalCount||0)/maxTotal)*100,100);
   const hasReg=myReg&&myReg.status==='confirmed';
-  const isAbsentJustified=myReg&&myReg.status==='absent_justified';
   const isAbsent=myReg&&myReg.status==='absent_justified';
   const statusLabel={open:'Abierto',closed:'Cerrado',played:'Jugado',cancelled:'Cancelado'}[m.status]||m.status;
 
@@ -381,8 +380,9 @@ async function buildMatchCard(m,myReg,isAdmin){
       </div>
       <div class="match-actions">
         <button class="btn btn-outline btn-sm" onclick="openMatchDetail('${m.id}')">Ver detalle</button>
-        ${m.status==='open'&&!hasReg?`<button class="btn btn-primary btn-sm" onclick="openMatchDetail('${m.id}')">Inscribirse</button>`:''}
-        ${m.status==='open'&&(hasReg||isAbsent)?`<button class="btn btn-danger btn-sm" onclick="openMatchDetail('${m.id}')">Gestionar</button>`:''}
+        ${m.status==='open'&&!hasReg&&!isAbsent?`<button class="btn btn-primary btn-sm" onclick="openMatchDetail('${m.id}')">Inscribirse</button>`:''}
+        ${m.status==='open'&&hasReg?`<button class="btn btn-danger btn-sm" onclick="openMatchDetail('${m.id}')">Gestionar</button>`:''}
+        ${m.status==='open'&&isAbsent?`<button class="btn btn-outline btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="openMatchDetail('${m.id}')">✈️ Ausencia</button>`:''}
         ${isAdmin?`<button class="btn btn-ghost btn-sm" onclick="openModal('edit-match','${m.id}')">✏️</button>`:''}
       </div>
     </div>
