@@ -210,7 +210,7 @@ function renderNav(isAdmin) {
   const tabs = [
     {key:'matches',icon:'⚽',label:'Partidos'},
     {key:'score',icon:'🏆',label:'Ranking'},
-    ...(isAdmin?[{key:'admin',icon:'⚙️',label:'Admin'}]:[]),
+    ...(isAdmin?[{key:'admin',icon:'⚙️',label:'Admin'},{key:'pagos',icon:'💰',label:'Pagos'}]:[]),
     {key:'profile',icon:'👤',label:'Perfil'},
   ];
   return `<nav class="nav">${tabs.map(t=>`
@@ -236,6 +236,7 @@ async function renderTab() {
     case 'matches': await renderMatches(el); break;
     case 'score':   await renderScore(el); break;
     case 'admin':   await renderAdmin(el); break;
+    case 'pagos':   await renderPagos(el); break;
     case 'profile': renderProfile(el); break;
   }
 }
@@ -952,6 +953,219 @@ window.deleteCode=async(btn)=>{
   await sb.from('invite_codes').delete().eq('id',id);
   await loadCodesSection();
 };
+
+
+// ── PAGOS ─────────────────────────────────────────────────────────────────────
+async function renderPagos(el) {
+  // Partidos activos últimas 4 semanas
+  const since = new Date();
+  since.setDate(since.getDate() - 28);
+  const {data:matches} = await sb.from('matches').select('*')
+    .gte('match_date', since.toISOString().split('T')[0])
+    .in('status',['open','played'])
+    .order('match_date',{ascending:false});
+
+  if(!matches?.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><p>No hay partidos activos en las últimas 4 semanas</p></div>';
+    return;
+  }
+
+  // Selector de partido
+  const selId = window._pagosMatchId || matches[0].id;
+  window._pagosMatchId = selId;
+
+  const selOptions = matches.map(m=>
+    `<option value="${m.id}" ${m.id===selId?'selected':''}>${fmtDate(m.match_date)} ${(m.match_time||'').slice(0,5)} — ${m.status==='played'?'Jugado':'Abierto'}</option>`
+  ).join('');
+
+  // Cargar datos del partido seleccionado
+  const match = matches.find(m=>m.id===selId);
+  const {data:regs} = await sb.from('registrations')
+    .select('*, profiles(full_name,nickname)')
+    .eq('match_id',selId)
+    .in('status',['confirmed','absent_justified'])
+    .order('created_at');
+
+  const {data:extras} = await sb.from('extra_charges')
+    .select('*').eq('match_id',selId).order('created_at');
+
+  // Totales
+  const totalEsperadoFoot = (regs||[]).filter(r=>r.type==='football'||r.type==='both').length * 100;
+  const totalEsperadoFood = (regs||[]).filter(r=>r.type==='food'||r.type==='both').length * 100;
+  const totalPagadoFoot = (regs||[]).filter(r=>r.paid_football).length * 100;
+  const totalPagadoFood = (regs||[]).filter(r=>r.paid_food).length * 100;
+  const totalExtras = (extras||[]).reduce((s,e)=>s+parseFloat(e.amount),0);
+  const totalEsperado = totalEsperadoFoot + totalEsperadoFood;
+  const totalRecaudado = totalPagadoFoot + totalPagadoFood + totalExtras;
+  const diferencia = totalRecaudado - totalEsperado;
+
+  // Filas de participantes
+  const rows = (regs||[]).map(r=>{
+    const p = r.profiles||{};
+    const name = p.nickname||p.full_name||'—';
+    const wantsFoot = r.type==='football'||r.type==='both';
+    const wantsFood = r.type==='food'||r.type==='both';
+    return `<div class="player-row" style="flex-wrap:wrap;gap:6px;padding:10px 8px">
+      <div style="flex:1;min-width:120px">
+        <div style="font-weight:500;font-size:.88rem">${name}</div>
+        <div style="font-size:.72rem;color:var(--muted)">${r.type==='both'?'⚽🍽 Ambas':r.type==='football'?'⚽ Fútbol':'🍽 Comida'}${r.status==='absent_justified'?' · ✈️ Ausente':''}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="text-align:center">
+          <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">⚽ $100</div>
+          <label class="sw"><input type="checkbox" ${r.paid_football?'checked':''} onchange="togglePago('${r.id}','paid_football',this.checked)"><span class="sw-slider"></span></label>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">🍽 $100</div>
+          <label class="sw"><input type="checkbox" ${r.paid_food?'checked':''} onchange="togglePago('${r.id}','paid_food',this.checked)"><span class="sw-slider"></span></label>
+        </div>
+        <div style="text-align:right;min-width:50px">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green)">$${(r.paid_football?100:0)+(r.paid_food?100:0)}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Filas de extras
+  const extraRows = (extras||[]).map(e=>
+    `<div class="player-row" style="padding:8px">
+      <span style="flex:1;font-size:.85rem">${e.description}</span>
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--blue)">$${parseFloat(e.amount).toFixed(0)}</span>
+      <button class="btn btn-ghost btn-sm" data-id="${e.id}" onclick="deleteExtra(this)">🗑️</button>
+    </div>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="field">
+      <label>Partido</label>
+      <select onchange="window._pagosMatchId=this.value;renderPagos(document.getElementById('tab-content'))">${selOptions}</select>
+    </div>
+
+    <!-- Resumen financiero -->
+    <div class="card" style="background:rgba(0,200,83,0.05);border-color:rgba(0,200,83,0.2)">
+      <div class="card-title" style="margin-bottom:10px">💰 Resumen financiero</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:.72rem;color:var(--muted)">Esperado fútbol</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--text)">$${totalEsperadoFoot}</div>
+          <div style="font-size:.7rem;color:var(--green)">Recaudado: $${totalPagadoFoot}</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:.72rem;color:var(--muted)">Esperado comida</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--text)">$${totalEsperadoFood}</div>
+          <div style="font-size:.7rem;color:var(--green)">Recaudado: $${totalPagadoFood}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:.72rem;color:var(--muted)">Extras</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--blue)">$${totalExtras.toFixed(0)}</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:.72rem;color:var(--muted)">Total esperado</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem">$${totalEsperado}</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:.72rem;color:var(--muted)">Total recaudado</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:${diferencia>=0?'var(--green)':'var(--red)'}">$${totalRecaudado.toFixed(0)}</div>
+          <div style="font-size:.7rem;color:${diferencia>=0?'var(--green)':'var(--red)'}">${diferencia>=0?'+':''}\$${diferencia.toFixed(0)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de participantes -->
+    <div class="section-title">Participantes (${(regs||[]).length})</div>
+    <div class="card" style="padding:8px">
+      ${rows||'<p style="color:var(--muted);font-size:.85rem;text-align:center;padding:16px">Sin inscriptos</p>'}
+    </div>
+
+    <!-- Cobros extras -->
+    <div class="section-title">Cobros extras</div>
+    <div class="card" style="padding:8px">
+      ${extraRows||'<p style="color:var(--muted);font-size:.78rem;padding:8px">Sin cobros extras</p>'}
+      <div style="display:flex;gap:8px;margin-top:8px;padding:4px">
+        <input id="extra-desc" placeholder="Descripción" style="flex:2;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-family:Inter;font-size:.85rem">
+        <input id="extra-amt" type="number" placeholder="$" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-family:Inter;font-size:.85rem">
+        <button class="btn btn-primary btn-sm" onclick="addExtra('${selId}')">+</button>
+      </div>
+    </div>
+
+    <!-- PDF control -->
+    <button class="btn btn-outline btn-full" style="border-color:var(--blue);color:var(--blue)" onclick="downloadPagosPDF('${selId}')">📄 Descargar resumen PDF</button>
+  `;
+
+  window.togglePago = async(regId, field, checked) => {
+    await sb.from('registrations').update({[field]:checked, paid_at: checked?new Date().toISOString():null}).eq('id',regId);
+    await renderPagos(el);
+  };
+
+  window.addExtra = async(matchId) => {
+    const desc = document.getElementById('extra-desc').value.trim();
+    const amt = parseFloat(document.getElementById('extra-amt').value);
+    if(!desc||!amt){alert('Ingresa descripción e importe');return;}
+    await sb.from('extra_charges').insert({match_id:matchId, description:desc, amount:amt, created_by:STATE.session.user.id});
+    await renderPagos(el);
+  };
+
+  window.deleteExtra = async(btn) => {
+    if(!confirm('¿Eliminar este cobro?'))return;
+    await sb.from('extra_charges').delete().eq('id',btn.dataset.id);
+    await renderPagos(el);
+  };
+
+  window.downloadPagosPDF = async(matchId) => {
+    const {data:match} = await sb.from('matches').select('*').eq('id',matchId).single();
+    const {data:regs2} = await sb.from('registrations').select('*, profiles(full_name,nickname)').eq('match_id',matchId).in('status',['confirmed','absent_justified']).order('created_at');
+    const {data:extras2} = await sb.from('extra_charges').select('*').eq('match_id',matchId).order('created_at');
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFont('helvetica','bold'); doc.setFontSize(16);
+    doc.text('REAL FC — Resumen de pagos', 20, 20);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text(`Partido: ${fmtDateLong(match.match_date)} ${(match.match_time||'').slice(0,5)}`, 20, 30);
+    doc.text(`Generado: ${new Date().toLocaleString('es-MX')}`, 20, 37);
+    doc.line(20, 42, 190, 42);
+    let y = 50;
+    doc.setFont('helvetica','bold');
+    doc.text('Nombre', 20, y); doc.text('Confirmó', 95, y); doc.text('Pagó ⚽', 125, y); doc.text('Pagó 🍽', 150, y); doc.text('Total', 175, y);
+    y+=6; doc.line(20,y-2,190,y-2); doc.setFont('helvetica','normal');
+    let tEspFoot=0,tEspFood=0,tPagFoot=0,tPagFood=0;
+    (regs2||[]).forEach(r=>{
+      if(y>270){doc.addPage();y=20;}
+      const p=r.profiles||{};
+      const name=(p.nickname||p.full_name||'—').substring(0,18);
+      const conf=r.type==='both'?'Fútbol+Comida':r.type==='football'?'Fútbol':'Comida';
+      const pFoot=r.paid_football?'✓':'—'; const pFood=r.paid_food?'✓':'—';
+      const total='$'+((r.paid_football?100:0)+(r.paid_food?100:0));
+      if(r.type==='football'||r.type==='both')tEspFoot+=100;
+      if(r.type==='food'||r.type==='both')tEspFood+=100;
+      if(r.paid_football)tPagFoot+=100;
+      if(r.paid_food)tPagFood+=100;
+      doc.text(name,20,y); doc.text(conf,95,y); doc.text(pFoot,130,y); doc.text(pFood,155,y); doc.text(total,175,y);
+      y+=7;
+    });
+    y+=4; doc.line(20,y-2,190,y-2);
+    doc.setFont('helvetica','bold');
+    doc.text('TOTALES',20,y);
+    doc.text('$'+tEspFoot,125,y); doc.text('$'+tEspFood,150,y);
+    doc.text('$'+(tPagFoot+tPagFood),175,y); y+=10;
+    if((extras2||[]).length){
+      doc.text('Cobros extras:',20,y); y+=6; doc.setFont('helvetica','normal');
+      let tExtra=0;
+      extras2.forEach(e=>{
+        doc.text(e.description,25,y); doc.text('$'+parseFloat(e.amount).toFixed(0),175,y); y+=6; tExtra+=parseFloat(e.amount);
+      });
+      doc.setFont('helvetica','bold'); doc.text('Total extras:',20,y); doc.text('$'+tExtra.toFixed(0),175,y); y+=8;
+    }
+    doc.setFontSize(12);
+    const tRec=tPagFoot+tPagFood+((extras2||[]).reduce((s,e)=>s+parseFloat(e.amount),0));
+    const diff=tRec-(tEspFoot+tEspFood);
+    doc.text(`Total esperado: $${tEspFoot+tEspFood}`,20,y); y+=7;
+    doc.text(`Total recaudado: $${tRec.toFixed(0)}`,20,y); y+=7;
+    doc.text(`Diferencia: ${diff>=0?'+':''}$${diff.toFixed(0)}`,20,y);
+    doc.save(`realfc-pagos-${match.match_date}.pdf`);
+  };
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
