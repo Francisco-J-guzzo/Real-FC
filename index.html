@@ -424,7 +424,7 @@ async function buildMatchDetailModal(matchId){
   const maxFoot=match.max_players||18;
   const maxTotal=match.max_total||30;
   const {count:totalCount}=await sb.from('registrations').select('id',{count:'exact',head:true}).eq('match_id',matchId).eq('status','confirmed');
-  const deadlinePassed=match.confirmation_deadline&&new Date(match.confirmation_deadline)<new Date();
+  const deadlinePassed=match.confirmation_deadline?new Date(match.confirmation_deadline)<new Date():false;
 
   let regSection='';
   if(match.status==='open'){
@@ -451,9 +451,9 @@ async function buildMatchDetailModal(matchId){
       const waitNum=myReg.priority_number&&myReg.priority_number>maxP;
       regSection=`<div class="alert alert-success">✓ Inscrito: ${myReg.type==='both'?'Fútbol + Comida':myReg.type==='football'?'Solo Fútbol':'Solo Comida'}
         ${myReg.priority_number?`<br>Número de prioridad: <strong>#${myReg.priority_number}</strong> ${isIn?'— <span style="color:var(--green)">TITULAR ✓</span>':waitNum?'— <span style="color:var(--gold)">LISTA DE ESPERA</span>':''}`:''}</div>
-      ${!deadlinePassed?`<div class="switch-row"><span style="font-size:.85rem;color:var(--muted)">Viaje de trabajo</span>
+      <div class="switch-row"><span style="font-size:.85rem;color:var(--muted)">Viaje de trabajo</span>
         <label class="sw"><input type="checkbox" id="work-trip"><span class="sw-slider"></span></label></div>
-        <button class="btn btn-danger btn-full" onclick="doCancel('${matchId}')">Cancelar inscripción</button><hr class="divider">`:'<hr class="divider">'}`;
+        <button class="btn btn-danger btn-full" onclick="doCancel('${matchId}')">Cancelar inscripción</button><hr class="divider">`;
     }
   }
 
@@ -492,6 +492,7 @@ async function buildMatchDetailModal(matchId){
     
     ${deadlinePassed?`<button class="btn btn-outline btn-full" style="margin-bottom:8px;border-color:var(--blue);color:var(--blue)" onclick="downloadPDF('${matchId}')">📄 Descargar lista PDF</button>`:''}
     ${match.status==='open'?`<button class="btn btn-outline btn-full" onclick="closeMatch('${matchId}')">Cerrar partido (marcar jugado)</button>`:''}
+    <button class="btn btn-danger btn-full" style="margin-top:8px" onclick="openModal('edit-match','${matchId}')">✏️ Editar / Eliminar partido</button>
   `:''}`;
 }
 
