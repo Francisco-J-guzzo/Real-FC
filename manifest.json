@@ -1,0 +1,20 @@
+{
+  "name": "Real FC",
+  "short_name": "Real FC",
+  "description": "Club de fútbol privado — gestión de partidos y scoring",
+  "start_url": "/Real-FC/",
+  "scope": "/Real-FC/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1a0f",
+  "theme_color": "#00C853",
+  "lang": "es-MX",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
