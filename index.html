@@ -1016,8 +1016,8 @@ async function renderPagos(el) {
     const wantsFoot = r.type==='football'||r.type==='both';
     const wantsFood = r.type==='food'||r.type==='both';
     return `<div class="player-row" style="flex-wrap:wrap;gap:6px;padding:10px 8px">
-      <div style="flex:1;min-width:120px">
-        <div style="font-weight:500;font-size:.88rem">${name}</div>
+      <div style="flex:1;min-width:120px;cursor:pointer" onclick="openHistorial('${r.user_id}','${name}')">
+        <div style="font-weight:500;font-size:.88rem">${name} <span style="font-size:.68rem;color:var(--blue)">ver historial →</span></div>
         <div style="font-size:.72rem;color:var(--muted)">${r.type==='both'?'⚽🍽 Ambas':r.type==='football'?'⚽ Fútbol':'🍽 Comida'}${r.status==='absent_justified'?' · ✈️ Ausente':''}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1209,6 +1209,138 @@ window.downloadRankingPDF = () => {
   doc.save('realfc-ranking-' + new Date().toISOString().split('T')[0] + '.pdf');
 };
 
+
+window.openHistorial = async(userId, userName) => {
+  // Cargar todas las inscripciones del usuario con datos del partido
+  const {data:allRegs} = await sb.from('registrations')
+    .select('*, matches(match_date, match_time, status)')
+    .eq('user_id', userId)
+    .in('matches.status', ['played'])
+    .in('status', ['confirmed', 'absent_justified'])
+    .order('created_at', {ascending: false});
+
+  // Filtrar solo partidos jugados con deuda
+  const regsWithDebt = (allRegs||[]).filter(r => {
+    if(!r.matches || r.matches.status !== 'played') return false;
+    const debefoot = (r.type==='football'||r.type==='both') && !r.paid_football;
+    const debefood = (r.type==='food'||r.type==='both') && !r.paid_food;
+    return debefoot || debefood;
+  });
+
+  // Calcular resumen total (todos los partidos jugados)
+  const allPlayed = (allRegs||[]).filter(r => r.matches?.status === 'played');
+  let totalEsperado = 0, totalPagado = 0;
+  allPlayed.forEach(r => {
+    if(r.type==='football'||r.type==='both') { totalEsperado+=100; if(r.paid_football) totalPagado+=100; }
+    if(r.type==='food'||r.type==='both') { totalEsperado+=100; if(r.paid_food) totalPagado+=100; }
+  });
+  const totalDeuda = totalEsperado - totalPagado;
+  const pctCumplimiento = totalEsperado > 0 ? Math.round((totalPagado/totalEsperado)*100) : 100;
+
+  // Construir filas de deuda
+  const debtRows = regsWithDebt.map(r => {
+    const debefoot = (r.type==='football'||r.type==='both') && !r.paid_football;
+    const debefood = (r.type==='food'||r.type==='both') && !r.paid_food;
+    const deuda = (debefoot?100:0)+(debefood?100:0);
+    return `<div class="player-row" style="padding:8px 10px">
+      <div style="flex:1">
+        <div style="font-size:.85rem;font-weight:500">${fmtDate(r.matches.match_date)}</div>
+        <div style="font-size:.72rem;color:var(--muted)">
+          ${debefoot?'<span style="color:var(--red)">⚽ debe $100</span>':''}
+          ${debefoot&&debefood?' · ':''}
+          ${debefood?'<span style="color:var(--red)">🍽 debe $100</span>':''}
+        </div>
+      </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--red)">-$${deuda}</div>
+    </div>`;
+  }).join('');
+
+  // Crear modal
+  const existing = document.getElementById('modal-overlay');
+  if(existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay'; overlay.id = 'modal-overlay';
+  overlay.onclick = e => { if(e.target===overlay) closeModal(); };
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-title">
+      <span>📊 ${userName}</span>
+      <button class="btn btn-ghost" onclick="closeModal()">✕</button>
+    </div>
+
+    <!-- Resumen -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:.68rem;color:var(--muted)">Total pagado</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--green)">$${totalPagado}</div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:.68rem;color:var(--muted)">Deuda total</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:${totalDeuda>0?'var(--red)':'var(--green)'}">$${totalDeuda}</div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:.68rem;color:var(--muted)">Cumplimiento</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:${pctCumplimiento>=80?'var(--green)':pctCumplimiento>=50?'var(--gold)':'var(--red)'}">${pctCumplimiento}%</div>
+      </div>
+    </div>
+
+    <!-- Botón PDF -->
+    <button class="btn btn-outline btn-full" style="border-color:var(--blue);color:var(--blue);margin-bottom:12px" 
+      onclick="downloadHistorialPDF('${userId}','${userName}',${totalPagado},${totalDeuda},${pctCumplimiento},${allPlayed.length})">
+      📄 Descargar resumen PDF
+    </button>
+
+    <!-- Deudas -->
+    <div class="section-title">Partidos con deuda (${regsWithDebt.length})</div>
+    ${debtRows || '<div style="text-align:center;padding:20px;color:var(--green);font-size:.9rem">✓ Sin deudas pendientes</div>'}
+  `;
+  overlay.appendChild(modal);
+  document.getElementById('app').appendChild(overlay);
+};
+
+window.downloadHistorialPDF = (userId, userName, pagado, deuda, pct, partidos) => {
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('REAL FC — Historial de pagos', 20, 20);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text(`Participante: ${userName}`, 20, 32);
+  doc.text(`Generado: ${new Date().toLocaleString('es-MX')}`, 20, 40);
+  doc.line(20, 45, 190, 45);
+  
+  let y = 55;
+  doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('Resumen', 20, y); y+=8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text(`Partidos jugados: ${partidos}`, 25, y); y+=7;
+  doc.text(`Total pagado: $${pagado}`, 25, y); y+=7;
+  doc.text(`Deuda pendiente: $${deuda}`, 25, y); y+=7;
+  doc.text(`Cumplimiento de pagos: ${pct}%`, 25, y); y+=12;
+
+  if(deuda > 0){
+    doc.setFont('helvetica','bold');
+    doc.text('Partidos con deuda:', 20, y); y+=8;
+    doc.setFont('helvetica','normal');
+    // Obtener datos del modal actual
+    document.querySelectorAll('#modal-overlay .player-row').forEach(row => {
+      if(y > 270){doc.addPage(); y=20;}
+      const fecha = row.querySelector('[style*="font-weight:500"]')?.textContent || '';
+      const detalle = row.querySelector('[style*="font-size:.72rem"]')?.textContent || '';
+      const monto = row.querySelector('[style*="Bebas"]')?.textContent || '';
+      doc.text(fecha, 25, y);
+      doc.text(detalle.replace(/[^\w\s\$]/g,'').trim(), 70, y);
+      doc.text(monto, 175, y);
+      y+=7;
+    });
+  } else {
+    doc.setTextColor(0, 180, 80);
+    doc.text('Sin deudas pendientes ✓', 25, y);
+    doc.setTextColor(0,0,0);
+  }
+  
+  doc.save('realfc-historial-' + userName.replace(/\s/g,'-') + '.pdf');
+};
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
   const {data:{session}}=await sb.auth.getSession();
