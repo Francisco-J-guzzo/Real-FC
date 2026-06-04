@@ -216,7 +216,7 @@ function renderHeader() {
 function renderNav(isAdmin) {
   const tabs = [
     {key:'matches',icon:'⚽',label:'Partidos'},
-    {key:'score',icon:'🏆',label:'Ranking'},
+    ...(isAdmin?[{key:'score',icon:'🏆',label:'Ranking'}]:[]),
     ...(isAdmin?[{key:'admin',icon:'⚙️',label:'Admin'},{key:'pagos',icon:'💰',label:'Pagos'}]:[]),
     {key:'profile',icon:'👤',label:'Perfil'},
   ];
@@ -755,10 +755,13 @@ async function renderScore(el){
     return{...p,score:Math.round(total*10)/10,s};
   });
   scored.sort((a,b)=>{if(a.guaranteed_access&&!b.guaranteed_access)return -1;if(!a.guaranteed_access&&b.guaranteed_access)return 1;return b.score-a.score;});
+  window._lastScores = scored;
+  window._lastScoreWeeks = cfg.rolling_weeks;
   const maxScore=scored[0]?.score||100;
   const myId=STATE.session.user.id;
   el.innerHTML=`<div class="card">
     <div class="card-header"><div><div class="card-title">Ranking · últimas ${cfg.rolling_weeks} semanas</div></div><span>🏆</span></div>
+    <button class="btn btn-outline btn-full" style="margin-bottom:12px;border-color:var(--blue);color:var(--blue)" onclick="downloadRankingPDF()">📄 Descargar ranking PDF</button>
     ${scored.map((p,i)=>`<div class="score-row">
       <span class="score-rank ${i<3?'top':''}">${p.guaranteed_access?'★':i+1}</span>
       <div class="score-av">${initials(p.full_name)}</div>
@@ -1173,6 +1176,38 @@ async function renderPagos(el) {
     doc.save(`realfc-pagos-${match.match_date}.pdf`);
   };
 }
+
+
+window.downloadRankingPDF = () => {
+  const scores = window._lastScores || [];
+  const weeks = window._lastScoreWeeks || 8;
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('REAL FC — Ranking de participantes', 20, 20);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text(`Últimas ${weeks} semanas · Generado: ${new Date().toLocaleString('es-MX')}`, 20, 30);
+  doc.line(20, 35, 190, 35);
+  let y = 45;
+  doc.setFont('helvetica','bold');
+  doc.text('#', 20, y); doc.text('Nombre', 35, y); doc.text('Score', 120, y);
+  doc.text('Asist%', 140, y); doc.text('Aviso%', 160, y); doc.text('Pago%', 180, y);
+  y += 6; doc.line(20, y-2, 190, y-2);
+  doc.setFont('helvetica','normal');
+  scores.forEach((p, i) => {
+    if(y > 270){doc.addPage(); y = 20;}
+    const rank = p.guaranteed_access ? '★' : String(i+1);
+    const name = (p.nickname || p.full_name || '—').substring(0, 22);
+    doc.text(rank, 20, y);
+    doc.text(name, 35, y);
+    doc.text(String(p.score), 120, y);
+    doc.text(Math.round(p.s.attendance)+'%', 140, y);
+    doc.text(Math.round(p.s.notice)+'%', 160, y);
+    doc.text(Math.round(p.s.pay)+'%', 180, y);
+    y += 7;
+  });
+  doc.save('realfc-ranking-' + new Date().toISOString().split('T')[0] + '.pdf');
+};
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
