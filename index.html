@@ -1213,13 +1213,36 @@ window.downloadRankingPDF = () => {
 async function init(){
   const {data:{session}}=await sb.auth.getSession();
   STATE.session=session;
+  STATE._initDone=false;
   if(session){const {data}=await sb.from('profiles').select('*').eq('id',session.user.id).single();STATE.profile=data;}
   await render();
-  sb.auth.onAuthStateChange(async(_,session)=>{
-    STATE.session=session;
-    if(session){const {data}=await sb.from('profiles').select('*').eq('id',session.user.id).single();STATE.profile=data;}
-    else STATE.profile=null;
-    await render();
+  STATE._initDone=true;
+
+  // Solo re-renderizar en cambios reales de auth (login/logout), no en el evento inicial
+  sb.auth.onAuthStateChange(async(event,session)=>{
+    if(!STATE._initDone) return;
+    if(event==='SIGNED_IN'||event==='SIGNED_OUT'||event==='TOKEN_REFRESHED'){
+      const prevId=STATE.session?.user?.id;
+      STATE.session=session;
+      if(session){
+        if(session.user.id!==prevId){
+          const {data}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+          STATE.profile=data;
+          await render();
+        }
+      } else {
+        STATE.profile=null;
+        await render();
+      }
+    }
+  });
+
+  // Fix 2: refrescar datos cuando la app vuelve a primer plano
+  document.addEventListener('visibilitychange', async()=>{
+    if(document.visibilityState==='visible' && STATE.session && STATE._initDone){
+      const el=document.getElementById('tab-content');
+      if(el) await renderTab();
+    }
   });
 }
 init();
