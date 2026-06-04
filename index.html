@@ -553,13 +553,14 @@ function bindModalActions(){
   window.doRegister=async(matchId)=>{
     const type=window._selectedType||'both';
     const workTrip=document.getElementById('work-trip')?.checked||false;
+    // Disparar audio inmediatamente antes de cualquier await (requerido por navegadores móviles)
+    if(!workTrip) playWelcome();
     const status=workTrip?'absent_justified':'confirmed';
     const {error}=await sb.from('registrations').upsert({
       match_id:matchId,user_id:STATE.session.user.id,type,status,
       is_work_trip:workTrip,confirmed_at:new Date().toISOString()
     },{onConflict:'match_id,user_id'});
     if(error){document.getElementById('modal-alert').innerHTML=`<div class="alert alert-error">${error.message}</div>`;return;}
-    playWelcome();
     closeModal(); STATE.tab='matches'; await renderTab();
   };
 
