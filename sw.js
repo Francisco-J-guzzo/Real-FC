@@ -1,4 +1,4 @@
-const CACHE = 'realfc-v1';
+const CACHE = 'realfc-202606042232';
 const ASSETS = [
   '/Real-FC/',
   '/Real-FC/index.html',
@@ -9,14 +9,12 @@ const ASSETS = [
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap'
 ];
 
-// Instalar: cachear assets estáticos
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())
   );
 });
 
-// Activar: limpiar caches viejos
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -25,22 +23,17 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Fetch: cache first para assets estáticos, network first para Supabase API
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  
-  // Supabase API siempre va a la red
-  if (url.hostname.includes('supabase.co')) {
-    e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}', {headers:{'Content-Type':'application/json'}})));
+  if(url.hostname.includes('supabase.co')){
+    e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}',{headers:{'Content-Type':'application/json'}})));
     return;
   }
-  
-  // Todo lo demás: cache first
   e.respondWith(
     caches.match(e.request).then(cached => {
-      if (cached) return cached;
+      if(cached) return cached;
       return fetch(e.request).then(response => {
-        if (response.ok) {
+        if(response.ok){
           const clone = response.clone();
           caches.open(CACHE).then(cache => cache.put(e.request, clone));
         }
