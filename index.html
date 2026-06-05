@@ -271,7 +271,8 @@ function bindAuth() {
 }
 function loginForm(){return`<div class="field"><label>Email</label><input id="a-email" type="email" placeholder="tu@email.com"></div>
 <div class="field"><label>Contraseña</label><input id="a-pass" type="password" placeholder="••••••••"></div>
-<button class="btn btn-primary btn-full" id="btn-login">Ingresar</button>`;}
+<button class="btn btn-primary btn-full" id="btn-login">Ingresar</button>
+<p style="text-align:center;margin-top:10px"><button class="btn btn-ghost" style="font-size:.82rem;color:var(--muted)" id="btn-forgot">¿Olvidaste tu contraseña?</button></p>`;} 
 function registerForm(){return`<div class="field"><label>Código de invitación</label><input id="a-code" placeholder="Ej. REALFC-2026" oninput="this.value=this.value.toUpperCase()"></div>
 <div class="field"><label>Nombre completo</label><input id="a-name" placeholder="Juan Pérez"></div>
 <div class="field"><label>Apodo (opcional)</label><input id="a-nick" placeholder="Juancho"></div>
@@ -285,6 +286,16 @@ function bindAuthForms(){
     btnL.disabled=true; btnL.textContent='Ingresando...';
     const {error}=await sb.auth.signInWithPassword({email:document.getElementById('a-email').value,password:document.getElementById('a-pass').value});
     if(error){showAlert(error.message,false);btnL.disabled=false;btnL.textContent='Ingresar';}
+  };
+  const btnF=document.getElementById('btn-forgot');
+  if(btnF) btnF.onclick=async()=>{
+    const email=document.getElementById('a-email').value.trim();
+    if(!email){showAlert('Ingresa tu email primero',false);return;}
+    btnF.disabled=true; btnF.textContent='Enviando...';
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:'https://francisco-j-guzzo.github.io/Real-FC/'});
+    if(error){showAlert(error.message,false);}
+    else{showAlert('✓ Revisá tu email — te enviamos un link de recuperación',true);}
+    btnF.disabled=false; btnF.textContent='¿Olvidaste tu contraseña?';
   };
   const btnR=document.getElementById('btn-register');
   if(btnR) btnR.onclick=async()=>{
@@ -389,7 +400,7 @@ async function buildMatchCard(m,myReg,isAdmin){
       </div>
       <div class="match-stats" style="margin-top:8px">
         ${m.has_food?'<span class="match-stat">🍽️ Comida</span>':''}
-        ${hasReg?`<span class="chip chip-green">✓ Inscrito (${myReg.type==='both'?'fútbol+comida':myReg.type==='football'?'fútbol':'comida'})</span>`:''}
+        ${hasReg?`<span class="chip chip-green">✓ Inscrito (${myReg.type==='both'?'fútbol+comida':myReg.type==='football'?'fútbol':myReg.type==='food'?'comida':'porra'})</span>`:''}
         ${isAbsent?`<span class="chip chip-gold">✈️ Ausencia justificada</span>`:''}
       </div>
       <div class="match-actions">
@@ -449,7 +460,7 @@ async function buildMatchDetailModal(matchId){
       } else {
         regSection=`<div class="section-title">Inscripción</div>
         <div class="type-options">
-          ${[['football','⚽ Solo fútbol'],['food','🍽️ Solo comida'],['both','⚽🍽️ Ambas']].map(([v,l])=>
+          ${[['football','⚽ Fútbol'],['food','🍽️ Comida'],['cheer','📣 Porra'],['both','⚽🍽️ Fútbol+Comida']].map(([v,l])=>
             `<button class="type-opt ${v==='both'?'sel':''}" data-type="${v}" onclick="selectType(this,'${v}')">${l}</button>`
           ).join('')}
         </div>
@@ -488,7 +499,7 @@ async function buildMatchDetailModal(matchId){
              `<span style="font-family:'Bebas Neue',sans-serif;color:var(--muted);width:26px;text-align:center">${i+1}</span>`}
       <div class="score-av" style="width:28px;height:28px;font-size:.7rem">${initials(p.full_name)}</div>
       <span style="flex:1">${name}</span>
-      <span style="font-size:.72rem;color:var(--muted)">${reg.type==='both'?'⚽🍽':reg.type==='football'?'⚽':'🍽'}</span>
+      <span style="font-size:.72rem;color:var(--muted)">${reg.type==='both'?'⚽🍽':reg.type==='football'?'⚽':reg.type==='food'?'🍽':'📣'}</span>
       ${p.guaranteed_access?'<span class="chip chip-blue" style="font-size:.62rem">G</span>':''}
       ${reg.arrival_order?`<span class="chip chip-green">#${reg.arrival_order}</span>`:''}
       ${isAdmin?`<div style="display:flex;gap:4px">
@@ -821,7 +832,7 @@ async function renderAdmin(el){
     ${(members||[]).map(m=>`<div class="score-row" style="padding:10px 0">
       <div class="score-av">${initials(m.full_name)}</div>
       <div class="score-info">
-        <div class="score-name">${m.nickname||m.full_name}</div>
+        <div class="score-name" style="${!m.is_active?'opacity:.4;text-decoration:line-through':''}}">${m.nickname||m.full_name}${!m.is_active?' <span style="font-size:.68rem;color:var(--red)">inactivo</span>':''}</div>
         <div style="display:flex;gap:4px;margin-top:3px">
           ${m.role==='admin'?'<span class="chip chip-gold">Admin</span>':''}
           ${m.guaranteed_access?'<span class="chip chip-blue">Garantizado</span>':''}
@@ -830,6 +841,7 @@ async function renderAdmin(el){
       <div style="display:flex;flex-direction:column;gap:4px">
         <button class="btn btn-outline btn-sm" style="font-size:.72rem" onclick="toggleMemberRole('${m.id}','${m.role}')">${m.role==='admin'?'Quitar admin':'Hacer admin'}</button>
         <button class="btn btn-outline btn-sm" style="font-size:.72rem;border-color:${m.guaranteed_access?'var(--blue)':'var(--border)'}" onclick="toggleGuaranteed('${m.id}',${m.guaranteed_access},${guaranteed})">${m.guaranteed_access?'Quitar garantía':'Garantizar'}</button>
+        <button class="btn btn-outline btn-sm" style="font-size:.72rem;border-color:${m.is_active?'var(--red)':'var(--green)'};color:${m.is_active?'var(--red)':'var(--green)'}" onclick="toggleActive('${m.id}',${m.is_active})">${m.is_active?'Desactivar':'Activar'}</button>
       </div>
     </div>`).join('')}
   </div>`}
@@ -858,6 +870,12 @@ async function renderAdmin(el){
   };
   if(window._adminTab==='codes')setTimeout(loadCodesSection,50);
   window.toggleMemberRole=async(uid,role)=>{await sb.from('profiles').update({role:role==='admin'?'member':'admin'}).eq('id',uid);renderAdmin(el);};
+  window.toggleActive=async(uid,current)=>{
+    const msg=current?'¿Desactivar este usuario? No podrá ingresar a la app.':'¿Activar este usuario?';
+    if(!confirm(msg))return;
+    await sb.from('profiles').update({is_active:!current}).eq('id',uid);
+    renderAdmin(el);
+  };
   window.toggleGuaranteed=async(uid,current,count)=>{
     if(!current&&count>=5){document.getElementById('admin-alert').innerHTML='<div class="alert alert-error">Máximo 5 accesos garantizados</div>';setTimeout(()=>{const a=document.getElementById('admin-alert');if(a)a.innerHTML='';},3000);return;}
     await sb.from('profiles').update({guaranteed_access:!current}).eq('id',uid);renderAdmin(el);
@@ -1020,17 +1038,19 @@ async function renderPagos(el) {
         <div style="font-size:.72rem;color:var(--muted)">${r.type==='both'?'⚽🍽 Ambas':r.type==='football'?'⚽ Fútbol':'🍽 Comida'}${r.status==='absent_justified'?' · ✈️ Ausente':''}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <div style="text-align:center">
+        ${r.type==='cheer'?
+          '<div style="font-size:.8rem;color:var(--muted);padding:4px 8px">📣 Sin cargo</div>'
+          :`<div style="text-align:center">
           <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">⚽ $100</div>
-          <label class="sw"><input type="checkbox" ${r.paid_football?'checked':''} onchange="togglePago('${r.id}','paid_football',this.checked)"><span class="sw-slider"></span></label>
+          <label class="sw"><input type="checkbox" ${r.paid_football?'checked':''} ${r.type==='food'?'disabled':''} onchange="togglePago('${r.id}','paid_football',this.checked)"><span class="sw-slider"></span></label>
         </div>
         <div style="text-align:center">
           <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">🍽 $100</div>
-          <label class="sw"><input type="checkbox" ${r.paid_food?'checked':''} onchange="togglePago('${r.id}','paid_food',this.checked)"><span class="sw-slider"></span></label>
+          <label class="sw"><input type="checkbox" ${r.paid_food?'checked':''} ${r.type==='football'?'disabled':''} onchange="togglePago('${r.id}','paid_food',this.checked)"><span class="sw-slider"></span></label>
         </div>
         <div style="text-align:right;min-width:50px">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green)">$${(r.paid_football?100:0)+(r.paid_food?100:0)}</div>
-        </div>
+        </div>`}
       </div>
     </div>`;
   }).join('');
