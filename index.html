@@ -1402,19 +1402,8 @@ init();
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/Real-FC/sw.js').then(reg => {
-      // Verificar actualizaciones cada vez que se abre la app
-      reg.update();
-      // Cuando hay una nueva versión lista, recargar automáticamente
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        newWorker.addEventListener('statechange', () => {
-          if(newWorker.state === 'activated'){
-            window.location.reload();
-          }
-        });
-      });
-    }).catch(err => console.log('SW error:', err));
+    navigator.serviceWorker.register('/Real-FC/sw.js')
+      .catch(err => console.log('SW error:', err));
   });
 }
 </script>
