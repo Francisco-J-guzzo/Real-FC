@@ -506,8 +506,8 @@ async function buildMatchDetailModal(matchId){
       ${reg.arrival_order?`<span class="chip chip-green">#${reg.arrival_order}</span>`:''}
       ${isAdmin?`<div style="display:flex;gap:4px">
         ${!reg.arrival_order&&match.status==='open'?`<button class="btn btn-ghost btn-sm" onclick="doCheckin('${matchId}','${reg.user_id}')">📍In</button>`:''}
-        ${(reg.type==='football'||reg.type==='both')&&!reg.paid_football?`<button class="btn btn-ghost btn-sm" style="color:var(--gold)" onclick="markPaid('${reg.id}','paid_football')">$⚽</button>`:''}
-        ${(reg.type==='food'||reg.type==='both')&&!reg.paid_food?`<button class="btn btn-ghost btn-sm" style="color:var(--gold)" onclick="markPaid('${reg.id}','paid_food')">$🍽</button>`:''}
+        ${(reg.type==='football'||reg.type==='both')?`<span style="font-size:.7rem;padding:2px 6px;border-radius:4px;background:${reg.paid_football?'rgba(0,200,83,.15)':'rgba(255,68,68,.1)'};color:${reg.paid_football?'var(--green)':'var(--red)'}">⚽${reg.paid_football?'✓':'$'}</span>`:''}
+        ${(reg.type==='food'||reg.type==='both')?`<span style="font-size:.7rem;padding:2px 6px;border-radius:4px;background:${reg.paid_food?'rgba(0,200,83,.15)':'rgba(255,68,68,.1)'};color:${reg.paid_food?'var(--green)':'var(--red)'}">🍽${reg.paid_food?'✓':'$'}</span>`:''}
       </div>`:''}
     </div>`;
   }).join('');
@@ -1044,20 +1044,20 @@ async function renderPagos(el) {
           '<div style="font-size:.8rem;color:var(--muted);padding:4px 8px">📣 Sin cargo</div>'
           :`<div style="display:flex;gap:6px;align-items:center">
           ${r.type!=='food'?`<button 
-            id="btn-foot-${r.id}"
+            id="btn-foot-${r.id}" data-foot
             onclick="togglePago('${r.id}','paid_football',${!r.paid_football},this)"
             style="padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-size:.75rem;font-weight:600;font-family:Inter,sans-serif;background:${r.paid_football?'var(--green)':'var(--border)'};color:${r.paid_football?'#000':'var(--muted)'}">
             ⚽ ${r.paid_football?'✓ Pagó':'Pendiente'}
           </button>`:''}
           ${r.type!=='football'?`<button
-            id="btn-food-${r.id}"
+            id="btn-food-${r.id}" data-food
             onclick="togglePago('${r.id}','paid_food',${!r.paid_food},this)"
             style="padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-size:.75rem;font-weight:600;font-family:Inter,sans-serif;background:${r.paid_food?'var(--green)':'var(--border)'};color:${r.paid_food?'#000':'var(--muted)'}">
             🍽 ${r.paid_food?'✓ Pagó':'Pendiente'}
           </button>`:''}
         </div>
         <div style="text-align:right;min-width:44px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green)">$${(r.paid_football?100:0)+(r.paid_food?100:0)}</div>
+          <div data-total style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green)">$${(r.paid_football?100:0)+(r.paid_food?100:0)}</div>
         </div>`}
       </div>
     </div>`;
@@ -1132,19 +1132,31 @@ async function renderPagos(el) {
   `;
 
   window.togglePago = async(regId, field, checked, btn) => {
-    // Cambiar apariencia del botón inmediatamente
     if(btn){
       btn.style.background = checked ? 'var(--green)' : 'var(--border)';
       btn.style.color = checked ? '#000' : 'var(--muted)';
       const icon = field==='paid_football' ? '⚽' : '🍽';
       btn.textContent = icon + ' ' + (checked ? '✓ Pagó' : 'Pendiente');
       btn.onclick = () => togglePago(regId, field, !checked, btn);
+      // Actualizar total del participante
+      const row = btn.closest('.player-row');
+      if(row){
+        const totalEl = row.querySelector('[data-total]');
+        if(totalEl){
+          const footBtn = row.querySelector('[data-foot]');
+          const foodBtn = row.querySelector('[data-food]');
+          let total = 0;
+          if(footBtn && footBtn.textContent.includes('✓')) total += 100;
+          if(foodBtn && foodBtn.textContent.includes('✓')) total += 100;
+          // Si es el botón actual, usar el valor nuevo
+          if(field==='paid_football') total = (checked?100:0) + (foodBtn&&foodBtn.textContent.includes('✓')?100:0);
+          if(field==='paid_food') total = (footBtn&&footBtn.textContent.includes('✓')?100:0) + (checked?100:0);
+          totalEl.textContent = '$'+total;
+          totalEl.style.color = total > 0 ? 'var(--green)' : 'var(--muted)';
+        }
+      }
     }
     await sb.from('registrations').update({[field]:checked, paid_at: checked?new Date().toISOString():null}).eq('id',regId);
-    // Actualizar total sin re-render completo
-    const allBtns = document.querySelectorAll(`[id^="btn-foot-${regId}"],[id^="btn-food-${regId}"]`);
-    let total = 0;
-    allBtns.forEach(b => { if(b.style.background.includes('green') || b.textContent.includes('✓')) total += 100; });
   };
 
   window.addExtra = async(matchId) => {
