@@ -1042,15 +1042,21 @@ async function renderPagos(el) {
       <div style="display:flex;gap:8px;align-items:center">
         ${r.type==='cheer'?
           '<div style="font-size:.8rem;color:var(--muted);padding:4px 8px">📣 Sin cargo</div>'
-          :`<div style="text-align:center;${r.type==='food'?'opacity:0.3':''}}">
-          ${r.type!=='food'?'<div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">⚽ $100</div>':''}
-          <label class="sw" style="${r.type==='food'?'pointer-events:none':''}}"><input type="checkbox" ${r.paid_football?'checked':''} ${r.type==='food'?'disabled':''} onchange="togglePago('${r.id}','paid_football',this.checked,this.nextElementSibling)"><span class="sw-slider"></span></label>
+          :`<div style="display:flex;gap:6px;align-items:center">
+          ${r.type!=='food'?`<button 
+            id="btn-foot-${r.id}"
+            onclick="togglePago('${r.id}','paid_football',${!r.paid_football},this)"
+            style="padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-size:.75rem;font-weight:600;font-family:Inter,sans-serif;background:${r.paid_football?'var(--green)':'var(--border)'};color:${r.paid_football?'#000':'var(--muted)'}">
+            ⚽ ${r.paid_football?'✓ Pagó':'Pendiente'}
+          </button>`:''}
+          ${r.type!=='football'?`<button
+            id="btn-food-${r.id}"
+            onclick="togglePago('${r.id}','paid_food',${!r.paid_food},this)"
+            style="padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-size:.75rem;font-weight:600;font-family:Inter,sans-serif;background:${r.paid_food?'var(--green)':'var(--border)'};color:${r.paid_food?'#000':'var(--muted)'}">
+            🍽 ${r.paid_food?'✓ Pagó':'Pendiente'}
+          </button>`:''}
         </div>
-        <div style="text-align:center;${r.type==='football'?'opacity:0.3':''}">
-          ${r.type!=='football'?'<div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">🍽 $100</div>':''}
-          <label class="sw" style="${r.type==='football'?'pointer-events:none':''}"><input type="checkbox" ${r.paid_food?'checked':''} ${r.type==='football'?'disabled':''} onchange="togglePago('${r.id}','paid_food',this.checked,this.nextElementSibling)"><span class="sw-slider"></span></label>
-        </div>
-        <div style="text-align:right;min-width:50px">
+        <div style="text-align:right;min-width:44px">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green)">$${(r.paid_football?100:0)+(r.paid_food?100:0)}</div>
         </div>`}
       </div>
@@ -1125,11 +1131,20 @@ async function renderPagos(el) {
     <button class="btn btn-outline btn-full" style="border-color:var(--blue);color:var(--blue)" onclick="downloadPagosPDF('${selId}')">📄 Descargar resumen PDF</button>
   `;
 
-  window.togglePago = async(regId, field, checked, cb) => {
-    // Cambiar color inmediatamente sin esperar el re-render
-    if(cb) cb.parentElement.style.background = checked ? 'var(--green)' : 'var(--border)';
+  window.togglePago = async(regId, field, checked, btn) => {
+    // Cambiar apariencia del botón inmediatamente
+    if(btn){
+      btn.style.background = checked ? 'var(--green)' : 'var(--border)';
+      btn.style.color = checked ? '#000' : 'var(--muted)';
+      const icon = field==='paid_football' ? '⚽' : '🍽';
+      btn.textContent = icon + ' ' + (checked ? '✓ Pagó' : 'Pendiente');
+      btn.onclick = () => togglePago(regId, field, !checked, btn);
+    }
     await sb.from('registrations').update({[field]:checked, paid_at: checked?new Date().toISOString():null}).eq('id',regId);
-    await renderPagos(el);
+    // Actualizar total sin re-render completo
+    const allBtns = document.querySelectorAll(`[id^="btn-foot-${regId}"],[id^="btn-food-${regId}"]`);
+    let total = 0;
+    allBtns.forEach(b => { if(b.style.background.includes('green') || b.textContent.includes('✓')) total += 100; });
   };
 
   window.addExtra = async(matchId) => {
