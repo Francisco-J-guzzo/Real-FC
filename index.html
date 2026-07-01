@@ -1085,12 +1085,12 @@ async function renderPagos(el) {
         <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:.72rem;color:var(--muted)">Esperado fútbol</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--text)">$${totalEsperadoFoot}</div>
-          <div style="font-size:.7rem;color:var(--green)">Recaudado: $${totalPagadoFoot}</div>
+          <div id="res-foot" style="font-size:.7rem;color:var(--green)">Recaudado: $${totalPagadoFoot}</div>
         </div>
         <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:.72rem;color:var(--muted)">Esperado comida</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--text)">$${totalEsperadoFood}</div>
-          <div style="font-size:.7rem;color:var(--green)">Recaudado: $${totalPagadoFood}</div>
+          <div id="res-food" style="font-size:.7rem;color:var(--green)">Recaudado: $${totalPagadoFood}</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -1104,8 +1104,8 @@ async function renderPagos(el) {
         </div>
         <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:.72rem;color:var(--muted)">Total recaudado</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:${diferencia>=0?'var(--green)':'var(--red)'}">$${totalRecaudado.toFixed(0)}</div>
-          <div style="font-size:.7rem;color:${diferencia>=0?'var(--green)':'var(--red)'}">${diferencia>=0?'+':''}\$${diferencia.toFixed(0)}</div>
+          <div id="res-total" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:${diferencia>=0?'var(--green)':'var(--red)'}">$${totalRecaudado.toFixed(0)}</div>
+          <div id="res-diff" style="font-size:.7rem;color:${diferencia>=0?'var(--green)':'var(--red)'}">${diferencia>=0?'+':''}\$${diferencia.toFixed(0)}</div>
         </div>
       </div>
     </div>
@@ -1132,6 +1132,10 @@ async function renderPagos(el) {
   `;
 
   window.togglePago = async(regId, field, checked, btn) => {
+    // Confirmación al desmarcar un pago ya realizado
+    if(!checked && btn && btn.textContent.includes('✓')){
+      if(!confirm('¿Quitar el pago ya registrado? Esto revertirá el cobro.')) return;
+    }
     if(btn){
       btn.style.background = checked ? 'var(--green)' : 'var(--border)';
       btn.style.color = checked ? '#000' : 'var(--muted)';
@@ -1142,22 +1146,41 @@ async function renderPagos(el) {
       const row = btn.closest('.player-row');
       if(row){
         const totalEl = row.querySelector('[data-total]');
-        if(totalEl){
-          const footBtn = row.querySelector('[data-foot]');
-          const foodBtn = row.querySelector('[data-food]');
-          let total = 0;
-          if(footBtn && footBtn.textContent.includes('✓')) total += 100;
-          if(foodBtn && foodBtn.textContent.includes('✓')) total += 100;
-          // Si es el botón actual, usar el valor nuevo
-          if(field==='paid_football') total = (checked?100:0) + (foodBtn&&foodBtn.textContent.includes('✓')?100:0);
-          if(field==='paid_food') total = (footBtn&&footBtn.textContent.includes('✓')?100:0) + (checked?100:0);
-          totalEl.textContent = '$'+total;
-          totalEl.style.color = total > 0 ? 'var(--green)' : 'var(--muted)';
-        }
+        const footBtn = row.querySelector('[data-foot]');
+        const foodBtn = row.querySelector('[data-food]');
+        const footPaid = field==='paid_football' ? checked : (footBtn&&footBtn.textContent.includes('✓'));
+        const foodPaid = field==='paid_food' ? checked : (foodBtn&&foodBtn.textContent.includes('✓'));
+        const total = (footPaid?100:0) + (foodPaid?100:0);
+        if(totalEl){ totalEl.textContent='$'+total; totalEl.style.color=total>0?'var(--green)':'var(--muted)'; }
       }
+      // Actualizar resumen financiero
+      setTimeout(updateResumen, 100);
     }
     await sb.from('registrations').update({[field]:checked, paid_at: checked?new Date().toISOString():null}).eq('id',regId);
   };
+
+  function updateResumen(){
+    let pagFoot=0, pagFood=0;
+    document.querySelectorAll('[data-foot]').forEach(b=>{ if(b.textContent.includes('✓')) pagFoot+=100; });
+    document.querySelectorAll('[data-food]').forEach(b=>{ if(b.textContent.includes('✓')) pagFood+=100; });
+    // Extras
+    let extras=0;
+    document.querySelectorAll('.extra-amount').forEach(e=>{ extras+=parseFloat(e.dataset.amount||0); });
+    const totalRec = pagFoot + pagFood + extras;
+    const resFoot = document.getElementById('res-foot');
+    const resFood = document.getElementById('res-food');
+    const resTotal = document.getElementById('res-total');
+    const resDiff = document.getElementById('res-diff');
+    // Obtener esperado del DOM (no cambia)
+    const espFoot = parseInt(document.querySelector('#res-foot')?.closest('[style*="border-radius"]')?.querySelector('[style*="1.4rem"]')?.textContent?.replace('$','')||0);
+    const espFood = parseInt(document.querySelector('#res-food')?.closest('[style*="border-radius"]')?.querySelector('[style*="1.4rem"]')?.textContent?.replace('$','')||0);
+    const totalEsp = espFoot + espFood;
+    const diff = totalRec - totalEsp;
+    if(resFoot) resFoot.textContent = 'Recaudado: $'+pagFoot;
+    if(resFood) resFood.textContent = 'Recaudado: $'+pagFood;
+    if(resTotal){ resTotal.textContent='$'+totalRec; resTotal.style.color=diff>=0?'var(--green)':'var(--red)'; }
+    if(resDiff){ resDiff.textContent=(diff>=0?'+':'')+' $'+Math.abs(diff); resDiff.style.color=diff>=0?'var(--green)':'var(--red)'; }
+  }
 
   window.addExtra = async(matchId) => {
     const desc = document.getElementById('extra-desc').value.trim();
@@ -1195,8 +1218,12 @@ async function renderPagos(el) {
       const p=r.profiles||{};
       const name=(p.nickname||p.full_name||'—').substring(0,18);
       const conf=r.type==='both'?'Fútbol+Comida':r.type==='football'?'Fútbol':'Comida';
-      const pFoot=r.paid_football?'✓':'—'; const pFood=r.paid_food?'✓':'—';
-      const total='$'+((r.paid_football?100:0)+(r.paid_food?100:0));
+      const debieFoot=(r.type==='football'||r.type==='both');
+      const debieFood=(r.type==='food'||r.type==='both');
+      const pFoot=!debieFoot?'N/A':r.paid_football?'$0':'$100';
+      const pFood=!debieFood?'N/A':r.paid_food?'$0':'$100';
+      const totalPend=((debieFoot&&!r.paid_football)?100:0)+((debieFood&&!r.paid_food)?100:0);
+      const total=totalPend>0?'$'+totalPend+' pend.':'$0';
       if(r.type==='football'||r.type==='both')tEspFoot+=100;
       if(r.type==='food'||r.type==='both')tEspFood+=100;
       if(r.paid_football)tPagFoot+=100;
