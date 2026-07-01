@@ -108,6 +108,8 @@ body{background:var(--surface);color:var(--text);font-family:'Inter',sans-serif;
 .sw-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s}
 .sw input:checked+.sw-slider{background:var(--green)}
 .sw input:checked+.sw-slider:before{transform:translateX(20px)}
+.sw input:disabled+.sw-slider{background:var(--border);opacity:0.4;cursor:not-allowed}
+.sw input:disabled+.sw-slider:before{background:#888}
 .type-options{display:flex;gap:8px;margin-bottom:12px}
 .type-opt{flex:1;padding:10px 6px;border:1px solid var(--border);border-radius:8px;text-align:center;cursor:pointer;font-size:.78rem;transition:all .2s;background:transparent;color:var(--text)}
 .type-opt.sel{border-color:var(--green);background:rgba(0,200,83,.1);color:var(--green)}
@@ -1040,13 +1042,13 @@ async function renderPagos(el) {
       <div style="display:flex;gap:8px;align-items:center">
         ${r.type==='cheer'?
           '<div style="font-size:.8rem;color:var(--muted);padding:4px 8px">📣 Sin cargo</div>'
-          :`<div style="text-align:center">
-          <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">⚽ $100</div>
-          <label class="sw"><input type="checkbox" ${r.paid_football?'checked':''} ${r.type==='food'?'disabled':''} onchange="togglePago('${r.id}','paid_football',this.checked)"><span class="sw-slider"></span></label>
+          :`<div style="text-align:center;${r.type==='food'?'opacity:0.3':''}}">
+          ${r.type!=='food'?'<div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">⚽ $100</div>':''}
+          <label class="sw" style="${r.type==='food'?'pointer-events:none':''}}"><input type="checkbox" ${r.paid_football?'checked':''} ${r.type==='food'?'disabled':''} onchange="togglePago('${r.id}','paid_football',this.checked)"><span class="sw-slider"></span></label>
         </div>
-        <div style="text-align:center">
-          <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">🍽 $100</div>
-          <label class="sw"><input type="checkbox" ${r.paid_food?'checked':''} ${r.type==='football'?'disabled':''} onchange="togglePago('${r.id}','paid_food',this.checked)"><span class="sw-slider"></span></label>
+        <div style="text-align:center;${r.type==='football'?'opacity:0.3':''}">
+          ${r.type!=='football'?'<div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">🍽 $100</div>':''}
+          <label class="sw" style="${r.type==='football'?'pointer-events:none':''}"><input type="checkbox" ${r.paid_food?'checked':''} ${r.type==='football'?'disabled':''} onchange="togglePago('${r.id}','paid_food',this.checked)"><span class="sw-slider"></span></label>
         </div>
         <div style="text-align:right;min-width:50px">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green)">$${(r.paid_football?100:0)+(r.paid_food?100:0)}</div>
